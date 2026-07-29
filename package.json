@@ -1,0 +1,22 @@
+{
+  "name": "regarded",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Trading bot platform with rules engine",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint lib/ test/",
+    "lint:fix": "eslint lib/ test/ --fix",
+    "typecheck": "tsc --noEmit --skipLibCheck"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
