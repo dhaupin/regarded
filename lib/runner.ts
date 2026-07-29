@@ -26,6 +26,7 @@ import { createRulesValidator, ValidationResult, OrderContext } from './rules';
 import { Scheduler, createScheduler, Job } from './scheduler';
 import { QoSManager, createQoSManager, CircuitState } from './qos';
 import { logAuditEvent, AuditEventType, RiskLevel } from './audit';
+import { createError, ErrorCode } from './error';
 
 // ============================================================================
 // Types
@@ -1030,7 +1031,11 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
    */
   async start(): Promise<void> {
     if (this.running) {
-      throw new Error('Agent is already running');
+      throw createError({
+        code: ErrorCode.INVALID_INPUT,
+        message: 'Agent is already running',
+        statusCode: 400,
+      });
     }
     
     this.running = true;

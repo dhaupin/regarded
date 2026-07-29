@@ -63,5 +63,8 @@ export * from './backtest';
 // News Service
 export * from './news';
 
+// Market Psychology
+export * from './psy';
+
 // Runner / Trading Agent
 export * from './runner';

@@ -7,6 +7,7 @@
 import { fetch } from './network';
 import { LRUCache } from './cache';
 import { RateLimiter } from './qos';
+import { createError, ErrorCode } from './error';
 
 export interface NewsItem {
   id: string;
@@ -172,7 +173,11 @@ export class NewsService {
     // Wait for rate limiter before making request
     const canProceed = this.rateLimiter.tryConsume(1);
     if (!canProceed) {
-      throw new Error('News API rate limit exceeded');
+      throw createError({
+        code: ErrorCode.RATE_LIMITED,
+        message: 'News API rate limit exceeded',
+        statusCode: 429,
+      });
     }
 
     const params = new URLSearchParams();
@@ -190,7 +195,11 @@ export class NewsService {
     });
 
     if (!response.ok) {
-      throw new Error(`News API error: ${response.status}`);
+      throw createError({
+        code: ErrorCode.EXCHANGE_ERROR,
+        message: `News API error: ${response.status}`,
+        statusCode: response.status,
+      });
     }
 
     const data = await response.json() as any[];

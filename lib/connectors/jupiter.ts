@@ -7,6 +7,7 @@
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
 import { BaseConnector } from './base';
+import { createError, ErrorCode } from '../error';
 
 export class JupiterConnector extends BaseConnector {
   name = 'Jupiter';
@@ -48,7 +49,11 @@ export class JupiterConnector extends BaseConnector {
   }
   
   async placeOrder(_order: Order): Promise<OrderResult> {
-    throw new Error('Jupiter is an aggregator - use Solana wallet for execution');
+    throw createError({
+      code: ErrorCode.NOT_IMPLEMENTED,
+      message: 'Jupiter is an aggregator - use Solana wallet for execution',
+      statusCode: 501,
+    });
   }
   
   async cancelOrder(_orderId: string): Promise<boolean> {

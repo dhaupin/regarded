@@ -7,6 +7,7 @@
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
 import { BaseConnector } from './base';
+import { createError, ErrorCode } from '../error';
 
 export class KrakenConnector extends BaseConnector {
   name = 'Kraken';
@@ -31,7 +32,7 @@ export class KrakenConnector extends BaseConnector {
   }
   
   async getBalance(): Promise<Balance[]> {
-    if (!this.connected) throw new Error('Not connected');
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     
     // In paper mode, return mock balances
     if (this.paperMode) {
@@ -47,7 +48,7 @@ export class KrakenConnector extends BaseConnector {
   }
   
   async getPrice(symbol: string): Promise<number> {
-    if (!this.connected) throw new Error('Not connected');
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     
     // In paper mode, return mock prices
     if (this.paperMode) {
@@ -72,7 +73,7 @@ export class KrakenConnector extends BaseConnector {
   }
   
   async getCandles(symbol: string, interval: CandleInterval, limit: number = 100): Promise<Candle[]> {
-    if (!this.connected) throw new Error('Not connected');
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     
     // In paper mode, generate mock candles
     if (this.paperMode) {
@@ -126,7 +127,7 @@ export class KrakenConnector extends BaseConnector {
   }
   
   async placeOrder(order: Order): Promise<OrderResult> {
-    if (!this.connected) throw new Error('Not connected');
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     
     if (this.paperMode) {
       const price = order.price ?? await this.getPrice(order.pair);
@@ -146,21 +147,25 @@ export class KrakenConnector extends BaseConnector {
       };
     }
     
-    throw new Error('Live trading not implemented');
+    throw createError({
+      code: ErrorCode.NOT_IMPLEMENTED,
+      message: 'Live trading not implemented',
+      statusCode: 501,
+    });
   }
   
   async cancelOrder(orderId: string): Promise<boolean> {
-    if (!this.connected) throw new Error('Not connected');
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     return this.paperMode ? true : false;
   }
   
   async getOpenOrders(_pair?: string): Promise<OrderResult[]> {
-    if (!this.connected) throw new Error('Not connected');
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     return [];
   }
   
   async getTradeHistory(_pair?: string, _limit: number = 50): Promise<Trade[]> {
-    if (!this.connected) throw new Error('Not connected');
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     return [];
   }
   

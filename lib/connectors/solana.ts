@@ -6,6 +6,7 @@
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
 import { BaseConnector } from './base';
+import { createError, ErrorCode } from '../error';
 
 export class SolanaConnector extends BaseConnector {
   name = 'Solana Wallet';
@@ -24,7 +25,7 @@ export class SolanaConnector extends BaseConnector {
   }
   
   async getBalance(): Promise<Balance[]> {
-    if (!this.connected) throw new Error('Not connected');
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     
     // Mock balances
     return [
@@ -55,7 +56,11 @@ export class SolanaConnector extends BaseConnector {
   
   async placeOrder(_order: Order): Promise<OrderResult> {
     // Would execute via Jupiter
-    throw new Error('Solana trading via wallet requires Jupiter integration');
+    throw createError({
+      code: ErrorCode.NOT_IMPLEMENTED,
+      message: 'Solana trading via wallet requires Jupiter integration',
+      statusCode: 501,
+    });
   }
   
   async cancelOrder(_orderId: string): Promise<boolean> {
