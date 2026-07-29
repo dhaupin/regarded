@@ -48,6 +48,24 @@ export interface AgentConfig {
   validator?: ReturnType<typeof createRulesValidator>;
   /** AgentGuard configuration (optional) */
   guard?: GuardConfig;
+  /** Backtest validator for strategy validation (optional) */
+  backtest?: {
+    /** Enable backtest validation */
+    enabled: boolean;
+    /** Custom validator instance */
+    validator?: import('./backtest').BacktestValidator;
+    /** Config for default validator */
+    config?: Partial<import('./backtest').BacktestConfig>;
+  };
+  /** News service for market news (optional) */
+  news?: {
+    /** Enable news service */
+    enabled: boolean;
+    /** Custom news service instance */
+    service?: import('./news').NewsService;
+    /** Config for default service */
+    config?: Partial<import('./news').NewsConfig>;
+  };
 }
 
 export interface Signal {
@@ -948,6 +966,8 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   private dailyPnl: number = 0;
   private guard: AgentGuard;
   private qos: QoSManager;
+  private backtest: import('./backtest').BacktestValidator | null = null;
+  private news: import('./news').NewsService | null = null;
   
   constructor(config: AgentConfig) {
     super();
@@ -965,6 +985,26 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     
     // Create QoS manager for circuit breaker
     this.qos = createQoSManager();
+    
+    // Initialize backtest validator if configured
+    if (config.backtest?.enabled) {
+      if (config.backtest.validator) {
+        this.backtest = config.backtest.validator;
+      } else if (config.backtest.config) {
+        const { createBacktestValidator } = require('./backtest');
+        this.backtest = createBacktestValidator(config.backtest.config);
+      }
+    }
+    
+    // Initialize news service if configured
+    if (config.news?.enabled) {
+      if (config.news.service) {
+        this.news = config.news.service;
+      } else if (config.news.config) {
+        const { createNewsService } = require('./news');
+        this.news = createNewsService(config.news.config);
+      }
+    }
     
     // Set up circuit breaker event handlers
     this.qos.on('qos:circuit-open', ({ breaker }) => {
@@ -1090,6 +1130,20 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
    */
   getQoS(): QoSManager {
     return this.qos;
+  }
+  
+  /**
+   * Get the backtest validator (if enabled)
+   */
+  getBacktest(): import('./backtest').BacktestValidator | null {
+    return this.backtest;
+  }
+  
+  /**
+   * Get the news service (if enabled)
+   */
+  getNews(): import('./news').NewsService | null {
+    return this.news;
   }
   
   /**
@@ -1373,6 +1427,33 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
         action: 'block',
         reason: scheduleCheck.reason,
       };
+    }
+    
+    // Check dynamic news blackout if news service is enabled
+    if (this.news) {
+      const symbols = signal.symbol.split('/');
+      const newsBlackout = await this.news.isNewsBlackoutPeriod(symbols);
+      if (newsBlackout.blackout) {
+        return {
+          valid: false,
+          action: 'block',
+          reason: newsBlackout.reason || 'News blackout active',
+        };
+      }
+    }
+    
+    // Check backtest if enabled (for new strategies)
+    if (this.backtest && this.config.guard?.requireBacktest) {
+      // Run quick backtest validation
+      const connector = this.config.connectors[0];
+      const dataCheck = await this.backtest.validateDataAvailability(connector, signal.symbol, '1h');
+      if (!dataCheck.available) {
+        return {
+          valid: false,
+          action: 'block',
+          reason: `Backtest: insufficient data (${dataCheck.periods} periods)`,
+        };
+      }
     }
     
     // Check signal confidence (strength 0-1 -> 0-100%)
