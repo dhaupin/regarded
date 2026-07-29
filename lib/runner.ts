@@ -27,6 +27,7 @@ import { Scheduler, createScheduler, Job } from './scheduler';
 import { QoSManager, createQoSManager, CircuitState } from './qos';
 import { logAuditEvent, AuditEventType, RiskLevel } from './audit';
 import { createError, ErrorCode } from './error';
+import { createMarketPsychology, PsychologyConfig, PsychologyResult, NewsAnalysis, createNewsAnalysis } from './psy';
 
 // ============================================================================
 // Types
@@ -66,6 +67,15 @@ export interface AgentConfig {
     service?: import('./news').NewsService;
     /** Config for default service */
     config?: Partial<import('./news').NewsConfig>;
+  };
+  /** Market psychology analysis (optional) */
+  psychology?: {
+    /** Enable psychology analysis */
+    enabled: boolean;
+    /** Custom psychology instance */
+    service?: import('./psy').MarketPsychology;
+    /** Config for default service */
+    config?: Partial<import('./psy').PsychologyConfig>;
   };
 }
 
@@ -969,6 +979,7 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   private qos: QoSManager;
   private backtest: import('./backtest').BacktestValidator | null = null;
   private news: import('./news').NewsService | null = null;
+  private psychology: import('./psy').MarketPsychology | null = null;
   
   constructor(config: AgentConfig) {
     super();
@@ -1004,6 +1015,17 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       } else if (config.news.config) {
         const { createNewsService } = require('./news');
         this.news = createNewsService(config.news.config);
+      }
+    }
+    
+    // Initialize psychology service if configured
+    if (config.psychology?.enabled) {
+      if (config.psychology.service) {
+        this.psychology = config.psychology.service;
+      } else if (config.psychology.config) {
+        this.psychology = createMarketPsychology(config.psychology.config);
+      } else {
+        this.psychology = createMarketPsychology();
       }
     }
     
@@ -1480,6 +1502,65 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
         action: 'block',
         reason: newsCheck.reason,
       };
+    }
+    
+    // Check market psychology if enabled
+    if (this.psychology) {
+      try {
+        // Get recent news for the symbol
+        const recentNews = await this.news?.getNews({ 
+          symbols: [signal.symbol],
+          since: Date.now() - 48 * 60 * 60 * 1000, // last 48 hours
+        });
+        
+        // Get recent candles for momentum analysis
+        const candles = await connector.getCandles(signal.symbol, '1h', 24);
+        
+        if (recentNews && recentNews.length > 0) {
+          const latestNews = recentNews[0];
+          const priceAtNews = latestNews.publishedAt 
+            ? (await connector.getCandles(signal.symbol, '1h', 1)).slice(-1)[0]?.close || signal.price
+            : signal.price;
+          
+          const analysis = createNewsAnalysis(
+            signal.symbol,
+            { publishedAt: latestNews.publishedAt, sentiment: latestNews.sentiment },
+            priceAtNews,
+            signal.price
+          );
+          
+          const psyResult = await this.psychology.analyze(
+            analysis,
+            candles.length > 0 ? candles : undefined,
+            this.config.userId
+          );
+          
+          if (!psyResult.overall.allowed) {
+            return {
+              valid: false,
+              action: 'block',
+              reason: `Psychology: ${psyResult.overall.reason}`,
+            };
+          }
+        } else if (candles.length > 0) {
+          // No news but have candles - check momentum exhaustion
+          const momentumResult = await this.psychology.analyzeMomentumExhaustion(
+            candles,
+            this.config.userId
+          );
+          
+          if (!momentumResult.allowed) {
+            return {
+              valid: false,
+              action: 'block',
+              reason: `Psychology: ${momentumResult.reason}`,
+            };
+          }
+        }
+      } catch (error) {
+        // Don't block trades if psychology analysis fails - log and continue
+        console.warn('Psychology analysis failed:', error);
+      }
     }
     
     // Check API rate limit
