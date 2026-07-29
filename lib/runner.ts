@@ -123,6 +123,24 @@ export interface GuardConfig {
   enableCircuitBreaker?: boolean;
   /** Circuit breaker failure threshold (default: 5) */
   circuitFailureThreshold?: number;
+  /** === NEW: Max drawdown % from peak (default: 20%) */
+  maxDrawdownPercent?: number;
+  /** === NEW: Order timeout in ms (default: 30000 = 30s) */
+  orderTimeoutMs?: number;
+  /** === NEW: Enable order retry on failure (default: true) */
+  enableOrderRetry?: boolean;
+  /** === NEW: Max retry attempts (default: 3) */
+  maxRetryAttempts?: number;
+  /** === NEW: Enable partial fill handling (default: true) */
+  allowPartialFills?: number;
+  /** === NEW: Max staleness age for prices in ms (default: 60000 = 1min) */
+  maxPriceStalenessMs?: number;
+  /** === NEW: Emergency stop - kill all trading (default: false) */
+  emergencyStop?: boolean;
+  /** === NEW: Skip weekend trading (default: false) */
+  skipWeekends?: boolean;
+  /** === NEW: Market types to trade (default: all) */
+  markets?: ('crypto' | 'forex' | 'stock' | 'futures')[];
 }
 
 export interface GuardResult {
@@ -142,6 +160,12 @@ export enum GuardReasonCode {
   SLIPPAGE = 'slippage',
   TRADING_HOURS = 'trading_hours',
   CIRCUIT_BREAKER = 'circuit_breaker',
+  MAX_DRAWDOWN = 'max_drawdown',
+  ORDER_TIMEOUT = 'order_timeout',
+  PRICE_STALE = 'price_stale',
+  EMERGENCY_STOP = 'emergency_stop',
+  WEEKEND = 'weekend',
+  MARKET_CLOSED = 'market_closed',
 }
 
 export class AgentGuard {
@@ -151,6 +175,13 @@ export class AgentGuard {
   private dailyTrades: number = 0;
   private lastResetDate: string = '';
   private circuitOpen: boolean = false;
+  
+  // New: Drawdown tracking
+  private peakValue: number = 0;
+  private currentDrawdown: number = 0;
+  
+  // New: Price staleness tracking
+  private lastPriceUpdate: Map<string, number> = new Map();
   
   constructor(config: GuardConfig = {}) {
     this.config = {
@@ -166,6 +197,16 @@ export class AgentGuard {
       tradingEndHour: config.tradingEndHour ?? 24,
       enableCircuitBreaker: config.enableCircuitBreaker ?? true,
       circuitFailureThreshold: config.circuitFailureThreshold ?? 5,
+      // New configs
+      maxDrawdownPercent: config.maxDrawdownPercent ?? 20,
+      orderTimeoutMs: config.orderTimeoutMs ?? 30000,
+      enableOrderRetry: config.enableOrderRetry ?? true,
+      maxRetryAttempts: config.maxRetryAttempts ?? 3,
+      allowPartialFills: config.allowPartialFills ?? 1, // 1 = enabled, 0 = disabled
+      maxPriceStalenessMs: config.maxPriceStalenessMs ?? 60000,
+      emergencyStop: config.emergencyStop ?? false,
+      skipWeekends: config.skipWeekends ?? false,
+      markets: config.markets ?? ['crypto', 'forex', 'stock', 'futures'],
     };
   }
   
@@ -179,6 +220,15 @@ export class AgentGuard {
   ): GuardResult {
     // Reset daily counters if new day
     this.resetDailyIfNeeded();
+    
+    // Check emergency stop
+    if (this.config.emergencyStop) {
+      return {
+        allowed: false,
+        reason: 'Emergency stop is active - all trading halted',
+        reasonCode: GuardReasonCode.EMERGENCY_STOP,
+      };
+    }
     
     // Check warmup
     if (this.tickCount < this.config.warmupTicks) {
@@ -216,8 +266,26 @@ export class AgentGuard {
       };
     }
     
-    // Check trading hours
+    // Check max drawdown
+    this.updateDrawdown(portfolioValue);
+    if (this.currentDrawdown >= this.config.maxDrawdownPercent) {
+      return {
+        allowed: false,
+        reason: `Max drawdown (${this.config.maxDrawdownPercent}%) exceeded - current: ${this.currentDrawdown.toFixed(1)}%`,
+        reasonCode: GuardReasonCode.MAX_DRAWDOWN,
+      };
+    }
+    
+    // Check trading hours (includes weekend check if enabled)
     if (!this.isWithinTradingHours()) {
+      const hour = new Date().getHours();
+      if (this.config.skipWeekends && (new Date().getDay() === 0 || new Date().getDay() === 6)) {
+        return {
+          allowed: false,
+          reason: 'Weekend - trading disabled',
+          reasonCode: GuardReasonCode.WEEKEND,
+        };
+      }
       return {
         allowed: false,
         reason: `Outside trading hours (${this.config.tradingStartHour}:00-${this.config.tradingEndHour}:00)`,
@@ -239,6 +307,90 @@ export class AgentGuard {
       reason: 'All checks passed',
       reasonCode: GuardReasonCode.OK,
     };
+  }
+  
+  /**
+   * Update portfolio value for drawdown tracking
+   */
+  updateDrawdown(currentValue: number): void {
+    if (currentValue > this.peakValue) {
+      this.peakValue = currentValue;
+    }
+    if (this.peakValue > 0) {
+      this.currentDrawdown = ((this.peakValue - currentValue) / this.peakValue) * 100;
+    }
+  }
+  
+  /**
+   * Check if price is stale for a symbol
+   */
+  checkPriceStaleness(symbol: string, priceTimestamp: number): GuardResult {
+    const now = Date.now();
+    const age = now - priceTimestamp;
+    
+    if (age > this.config.maxPriceStalenessMs) {
+      return {
+        allowed: false,
+        reason: `Price stale: ${Math.round(age / 1000)}s old (max ${this.config.maxPriceStalenessMs / 1000}s)`,
+        reasonCode: GuardReasonCode.PRICE_STALE,
+      };
+    }
+    
+    return {
+      allowed: true,
+      reason: 'Price is fresh',
+      reasonCode: GuardReasonCode.OK,
+    };
+  }
+  
+  /**
+   * Record price update for staleness tracking
+   */
+  recordPriceUpdate(symbol: string, timestamp: number): void {
+    this.lastPriceUpdate.set(symbol, timestamp);
+  }
+  
+  /**
+   * Enable/disable emergency stop
+   */
+  setEmergencyStop(enabled: boolean): void {
+    this.config.emergencyStop = enabled;
+  }
+  
+  /**
+   * Get current drawdown %
+   */
+  getCurrentDrawdown(): number {
+    return this.currentDrawdown;
+  }
+  
+  /**
+   * Reset drawdown tracking (e.g., start of new session)
+   */
+  resetDrawdown(): void {
+    this.peakValue = 0;
+    this.currentDrawdown = 0;
+  }
+  
+  /**
+   * Check if order should be retried
+   */
+  shouldRetry(attemptCount: number): boolean {
+    return this.config.enableOrderRetry && attemptCount < this.config.maxRetryAttempts;
+  }
+  
+  /**
+   * Get order timeout
+   */
+  getOrderTimeout(): number {
+    return this.config.orderTimeoutMs;
+  }
+  
+  /**
+   * Check if partial fills allowed
+   */
+  isPartialFillsEnabled(): boolean {
+    return this.config.allowPartialFills > 0;
   }
   
   /**
@@ -600,6 +752,46 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   }
   
   /**
+   * Emergency stop - immediately halt all trading
+   */
+  emergencyStop(): void {
+    this.guard.setEmergencyStop(true);
+    this.emit('guard:triggered', { 
+      reason: 'emergency_stop', 
+      message: 'Emergency stop activated - all trading halted' 
+    });
+  }
+  
+  /**
+   * Resume trading after emergency stop
+   */
+  resumeTrading(): void {
+    this.guard.setEmergencyStop(false);
+    this.emit('guard:resumed', { 
+      message: 'Emergency stop deactivated - trading resumed' 
+    });
+  }
+  
+  /**
+   * Get guard status
+   */
+  getGuardStatus(): {
+    emergencyStop: boolean;
+    drawdown: number;
+    peakValue: number;
+    dailyTrades: number;
+    dailyLoss: number;
+  } {
+    return {
+      emergencyStop: (this.guard as any).config?.emergencyStop ?? false,
+      drawdown: this.guard.getCurrentDrawdown(),
+      peakValue: (this.guard as any).peakValue ?? 0,
+      dailyTrades: this.dailyTrades,
+      dailyLoss: this.dailyPnl,
+    };
+  }
+  
+  /**
    * Get portfolio summary
    */
   async getPortfolio(): Promise<PortfolioSummary> {
@@ -618,6 +810,9 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       const currentPrice = await connector.getPrice(position.symbol);
       position.currentPrice = currentPrice;
       
+      // Record price for staleness tracking
+      this.guard.recordPriceUpdate(position.symbol, Date.now());
+      
       const positionValue = position.amount * currentPrice;
       positionsValue += positionValue;
       
@@ -632,6 +827,9 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     
     totalValue = availableBalance + positionsValue;
     const totalPnlPercent = totalValue > 0 ? (totalPnl / (totalValue - totalPnl)) * 100 : 0;
+    
+    // Update drawdown tracking
+    this.guard.updateDrawdown(totalValue);
     
     return {
       totalValue,
@@ -825,6 +1023,17 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   
   private async validateSignal(signal: Signal): Promise<ValidationResult> {
     const connector = this.config.connectors[0];
+    
+    // Check price staleness before validating
+    const lastUpdate = (this.guard as any).lastPriceUpdate?.get(signal.symbol) ?? 0;
+    const stalenessCheck = this.guard.checkPriceStaleness(signal.symbol, lastUpdate);
+    if (!stalenessCheck.allowed) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: stalenessCheck.reason,
+      };
+    }
     
     // Get balance
     const balances = await connector.getBalance();
