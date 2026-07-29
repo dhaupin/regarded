@@ -1,7 +1,7 @@
 /**
  * Regarded Library
  * 
- * Core modules for the trading bot platform.
+ * Core modules for the trading agent platform.
  * 
  * @example
  * import { createConnector, createRulesEngine, calculateIndicator } from './lib/regarded';
@@ -60,5 +60,5 @@ export * from './cache';
 // API / HTTP Handlers
 export * from './api';
 
-// Runner / Trading Bot
+// Runner / Trading Agent
 export * from './runner';

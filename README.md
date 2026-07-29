@@ -1,2 +1,2 @@
 # regarded
-An experimental trading bot that's slow, inefficient, and poorly crafted.
+An experimental trading agent that's slow, inefficient, and poorly crafted.

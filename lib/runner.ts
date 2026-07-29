@@ -202,7 +202,7 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   }
   
   /**
-   * Stop the trading bot
+   * Stop the trading agent
    */
   async stop(): Promise<void> {
     if (!this.running) {

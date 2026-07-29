@@ -1,10 +1,10 @@
-# Regarded - Crypto Trading Bot Specification
+# Regarded - Crypto Trading Agent Specification
 
 ## Project Overview
 
 **Project Name:** Regarded  
-**Type:** Full-stack Web Application (Trading Bot Platform)  
-**Core Functionality:** A KISS/DRY cryptocurrency trading bot that executes paper and live trades based on configurable technical indicators and custom rulesets across multiple exchanges and chains.  
+**Type:** Full-stack Web Application (Trading Agent Platform)  
+**Core Functionality:** A KISS/DRY cryptocurrency trading agent that executes paper and live trades based on configurable technical indicators and custom rulesets across multiple exchanges and chains.  
 **Target Users:** Individual traders (initially the developers and friends) with personal dashboards, session management, and role-based access.
 
 ---
