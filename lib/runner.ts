@@ -119,6 +119,10 @@ export interface GuardConfig {
   tradingStartHour?: number;
   /** Trading hours - end hour (0-23, default: 24 = all day) */
   tradingEndHour?: number;
+  /** Trading hours - timezone (default: 'UTC') */
+  tradingTimezone?: string;
+  /** Enable DST handling for trading hours (default: true) */
+  enableDST?: boolean;
   /** Enable circuit breaker on exchange failures (default: true) */
   enableCircuitBreaker?: boolean;
   /** Circuit breaker failure threshold (default: 5) */
@@ -141,6 +145,18 @@ export interface GuardConfig {
   skipWeekends?: boolean;
   /** === NEW: Market types to trade (default: all) */
   markets?: ('crypto' | 'forex' | 'stock' | 'futures')[];
+  /** === NEW: Min signal confidence 0-100 (default: 50) */
+  minSignalConfidence?: number;
+  /** === NEW: Max % of portfolio in single position (default: 30%) */
+  maxPositionConcentration?: number;
+  /** === NEW: Max leverage (default: 1) */
+  maxLeverage?: number;
+  /** === NEW: News blackout - no trading during major events (default: false) */
+  newsBlackout?: boolean;
+  /** === NEW: Min volatility for trades (ATR as % of price) */
+  minVolatilityPercent?: number;
+  /** === NEW: Max volatility - reduce size in high vol */
+  maxVolatilityPercent?: number;
 }
 
 export interface GuardResult {
@@ -166,6 +182,13 @@ export enum GuardReasonCode {
   EMERGENCY_STOP = 'emergency_stop',
   WEEKEND = 'weekend',
   MARKET_CLOSED = 'market_closed',
+  // New reason codes
+  LOW_CONFIDENCE = 'low_confidence',
+  CONCENTRATION = 'concentration',
+  LEVERAGE = 'leverage',
+  NEWS_BLACKOUT = 'news_blackout',
+  LOW_VOLATILITY = 'low_volatility',
+  HIGH_VOLATILITY = 'high_volatility',
 }
 
 export class AgentGuard {
@@ -207,6 +230,16 @@ export class AgentGuard {
       emergencyStop: config.emergencyStop ?? false,
       skipWeekends: config.skipWeekends ?? false,
       markets: config.markets ?? ['crypto', 'forex', 'stock', 'futures'],
+      // New timezone configs
+      tradingTimezone: config.tradingTimezone ?? 'UTC',
+      enableDST: config.enableDST ?? true,
+      // New guard configs
+      minSignalConfidence: config.minSignalConfidence ?? 50,
+      maxPositionConcentration: config.maxPositionConcentration ?? 30,
+      maxLeverage: config.maxLeverage ?? 1,
+      newsBlackout: config.newsBlackout ?? false,
+      minVolatilityPercent: config.minVolatilityPercent ?? 0,
+      maxVolatilityPercent: config.maxVolatilityPercent ?? 100,
     };
   }
   
@@ -526,9 +559,114 @@ export class AgentGuard {
     }
   }
   
-  private isWithinTradingHours(): boolean {
-    const hour = new Date().getHours();
-    return hour >= this.config.tradingStartHour && hour < this.config.tradingEndHour;
+  /**
+   * Check if current time is within trading hours (with timezone & DST support)
+   */
+  isWithinTradingHours(): boolean {
+    try {
+      // Get current time in the configured timezone
+      const now = new Date();
+      
+      // Create a date in the target timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: this.config.tradingTimezone,
+        hour: 'numeric',
+        hour12: false,
+        weekday: 'short',
+      });
+      
+      // Get hour in target timezone
+      const hourStr = formatter.format(now).replace(/[^0-9]/g, '');
+      const hour = parseInt(hourStr, 10);
+      
+      // Check if within hours
+      if (hour < this.config.tradingStartHour || hour >= this.config.tradingEndHour) {
+        return false;
+      }
+      
+      // Weekend check
+      if (this.config.skipWeekends) {
+        const day = now.getDay();
+        if (day === 0 || day === 6) { // Sunday = 0, Saturday = 6
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (e) {
+      // If timezone is invalid, fallback to UTC
+      console.warn(`Invalid timezone ${this.config.tradingTimezone}, falling back to UTC`);
+      const hour = new Date().getUTCHours();
+      return hour >= this.config.tradingStartHour && hour < this.config.tradingEndHour;
+    }
+  }
+  
+  /**
+   * Check signal confidence
+   */
+  checkSignalConfidence(confidence: number): GuardResult {
+    if (confidence < this.config.minSignalConfidence) {
+      return {
+        allowed: false,
+        reason: `Signal confidence ${confidence}% below minimum ${this.config.minSignalConfidence}%`,
+        reasonCode: GuardReasonCode.LOW_CONFIDENCE,
+      };
+    }
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check position concentration
+   */
+  checkPositionConcentration(positionValue: number, portfolioValue: number): GuardResult {
+    if (portfolioValue <= 0) {
+      return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+    }
+    
+    const concentrationPercent = (positionValue / portfolioValue) * 100;
+    if (concentrationPercent > this.config.maxPositionConcentration) {
+      return {
+        allowed: false,
+        reason: `Position concentration ${concentrationPercent.toFixed(1)}% exceeds max ${this.config.maxPositionConcentration}%`,
+        reasonCode: GuardReasonCode.CONCENTRATION,
+      };
+    }
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check leverage
+   */
+  checkLeverage(leverage: number): GuardResult {
+    if (leverage > this.config.maxLeverage) {
+      return {
+        allowed: false,
+        reason: `Leverage ${leverage}x exceeds max ${this.config.maxLeverage}x`,
+        reasonCode: GuardReasonCode.LEVERAGE,
+      };
+    }
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check volatility
+   */
+  checkVolatility(volatilityPercent: number): GuardResult {
+    if (this.config.minVolatilityPercent > 0 && volatilityPercent < this.config.minVolatilityPercent) {
+      return {
+        allowed: false,
+        reason: `Volatility ${volatilityPercent.toFixed(2)}% below minimum ${this.config.minVolatilityPercent}%`,
+        reasonCode: GuardReasonCode.LOW_VOLATILITY,
+      };
+    }
+    if (volatilityPercent > this.config.maxVolatilityPercent) {
+      return {
+        allowed: false,
+        reason: `Volatility ${volatilityPercent.toFixed(2)}% exceeds maximum ${this.config.maxVolatilityPercent}%`,
+        reasonCode: GuardReasonCode.HIGH_VOLATILITY,
+      };
+    }
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
   }
 }
 
