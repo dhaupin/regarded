@@ -33,8 +33,9 @@ export * from './auth';
 // Config
 export * from './config';
 
-// Utils & Storage (combined)
+// Utils & Storage
 export * from './storage';
+export * from './utils';
 
 // Connectors
 export * from './connectors';
@@ -65,6 +66,12 @@ export * from './news';
 
 // Market Psychology
 export * from './psy';
+
+// Portfolio / Position Management
+export * from './portfolio';
+
+// Guard / Risk Management
+export * from './guard';
 
 // Runner / Trading Agent
 export * from './runner';

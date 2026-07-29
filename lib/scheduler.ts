@@ -495,8 +495,10 @@ export class Heartbeat extends EventEmitter<Omit<SchedulerEvents, 'scheduler:job
   
   /**
    * Get time since last beat
+   * Returns 0 if heartbeat has never started or was stopped
    */
   getTimeSinceBeat(): number {
+    if (this.lastBeat === 0) return 0;
     return Date.now() - this.lastBeat;
   }
   
@@ -515,6 +517,8 @@ export class Heartbeat extends EventEmitter<Omit<SchedulerEvents, 'scheduler:job
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
     }
+    // Reset last beat so getTimeSinceBeat() returns 0 when stopped
+    this.lastBeat = 0;
   }
 }
 

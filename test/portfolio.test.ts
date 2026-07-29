@@ -308,14 +308,15 @@ describe('Portfolio', () => {
     });
 
     it('should block when daily loss limit breached', async () => {
-      // Open and close with loss
-      await portfolio.openPosition({ id: '1', symbol: 'A', side: 'long', entryPrice: 100, amount: 1 });
-      await portfolio.closePosition('A', 50); // -50
+      // Open and close with loss exceeding $1000
+      // Entry: $100, Exit: $0, Amount: 10 = -$1000 loss
+      await portfolio.openPosition({ id: '1', symbol: 'A', side: 'long', entryPrice: 100, amount: 10 });
+      await portfolio.closePosition('A', 0); // -1000
 
-      // Try to open another - should fail (daily loss > $1000)
+      // Try to open another - should fail (daily loss >= $1000)
       const result = portfolio.canOpenPosition(1000);
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('daily loss');
+      expect(result.reason).toContain('Daily loss');
     });
 
     it('should check stop loss trigger', async () => {
@@ -451,9 +452,10 @@ describe('Portfolio', () => {
       const handler = vi.fn();
       portfolio.on('risk:breached', handler);
 
-      // Create large loss to breach limit
+      // Create loss that breaches $1000 limit
+      // Entry: $100, Exit: $0, Amount: 10 = -$1000 loss (triggers at <= -1000)
       await portfolio.openPosition({ id: '1', symbol: 'A', side: 'long', entryPrice: 100, amount: 10 });
-      await portfolio.closePosition('A', 1); // -990 (breaches $1000 limit)
+      await portfolio.closePosition('A', 0); // -1000 (at limit)
 
       expect(handler).toHaveBeenCalled();
     });

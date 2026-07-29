@@ -8,6 +8,7 @@
 import { EventEmitter } from './event';
 import { logAuditEvent } from './audit';
 import { createError, ErrorCode } from './error';
+import { type Storage, createJSONStorage } from './storage';
 import type { Order, OrderSide } from './types';
 
 // ============================================================================
@@ -23,6 +24,8 @@ export interface Position {
   currentPrice?: number;
   unrealizedPnl?: number;
   realizedPnl?: number;
+  pnl?: number;         // Combined P&L (unrealized + realized)
+  pnlPercent?: number;  // P&L as percentage of entry value
   stopLoss?: number;
   takeProfit?: number;
   openedAt: number;
@@ -72,6 +75,17 @@ export interface PositionCloseResult {
   error?: string;
 }
 
+/** State to persist for portfolio */
+export interface PortfolioState {
+  positions: Position[];
+  dailyPnl: number;
+  dailyTrades: number;
+  lastResetDate: string;  // ISO date string for daily reset
+  totalRealizedPnl: number;
+  winningTrades: number;
+  losingTrades: number;
+}
+
 // ============================================================================
 // Events
 // ============================================================================
@@ -103,6 +117,8 @@ const DEFAULT_CONFIG: Required<PortfolioConfig> = {
 export class Portfolio extends EventEmitter<PortfolioEvents> {
   private positions: Map<string, Position> = new Map();
   private config: Required<PortfolioConfig>;
+  private storage?: Storage;
+  private userId?: string;
   
   // Daily tracking
   private dailyPnl: number = 0;
@@ -114,10 +130,15 @@ export class Portfolio extends EventEmitter<PortfolioEvents> {
   private totalRealizedPnl: number = 0;
   private totalWinningTrades: number = 0;
   private totalLosingTrades: number = 0;
+  
+  // Last reset date for daily tracking
+  private lastResetDate: string = new Date().toISOString().split('T')[0];
 
-  constructor(config: PortfolioConfig = {}) {
+  constructor(config: PortfolioConfig = {}, storage?: Storage, userId?: string) {
     super();
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.storage = storage;
+    this.userId = userId;
   }
 
   /**
@@ -125,6 +146,104 @@ export class Portfolio extends EventEmitter<PortfolioEvents> {
    */
   getConfig(): Readonly<Required<PortfolioConfig>> {
     return { ...this.config };
+  }
+
+  // ============================================================================
+  // Persistence
+  // ============================================================================
+
+  /**
+   * Get storage key for this portfolio
+   */
+  private getStorageKey(): string {
+    if (!this.userId) return 'portfolio:default';
+    return `portfolio:${this.userId}`;
+  }
+
+  /**
+   * Save portfolio state to storage
+   */
+  async save(): Promise<void> {
+    if (!this.storage) return;
+    
+    // Reset daily if needed
+    this.resetDailyIfNeeded();
+    
+    const state: PortfolioState = {
+      positions: Array.from(this.positions.values()),
+      dailyPnl: this.dailyPnl,
+      dailyTrades: this.dailyTrades,
+      lastResetDate: this.lastResetDate,
+      totalRealizedPnl: this.totalRealizedPnl,
+      winningTrades: this.totalWinningTrades,
+      losingTrades: this.totalLosingTrades,
+    };
+    
+    // Use JSON storage helper
+    const jsonStorage = createJSONStorage<PortfolioState>(this.storage, this.getStorageKey());
+    await jsonStorage.save(state);
+    
+    logAuditEvent('portfolio_saved' as any, 'portfolio', { 
+      userId: this.userId, 
+      positionsCount: state.positions.length,
+      dailyPnl: state.dailyPnl 
+    });
+  }
+
+  /**
+   * Load portfolio state from storage
+   */
+  async load(): Promise<boolean> {
+    if (!this.storage) return false;
+    
+    // Use JSON storage helper
+    const jsonStorage = createJSONStorage<PortfolioState>(this.storage, this.getStorageKey());
+    const state = await jsonStorage.load();
+    
+    if (!state) return false;
+    
+    try {
+      // Restore positions
+      this.positions.clear();
+      for (const pos of state.positions) {
+        this.positions.set(pos.symbol, pos);
+      }
+      
+      // Restore stats
+      this.dailyPnl = state.dailyPnl;
+      this.dailyTrades = state.dailyTrades;
+      this.lastResetDate = state.lastResetDate;
+      this.totalRealizedPnl = state.totalRealizedPnl;
+      this.totalWinningTrades = state.winningTrades;
+      this.totalLosingTrades = state.losingTrades;
+      
+      // Check if we need to reset daily (new day)
+      this.resetDailyIfNeeded();
+      
+      logAuditEvent('portfolio_loaded' as any, 'portfolio', { 
+        userId: this.userId, 
+        positionsCount: state.positions.length 
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to load portfolio state:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Reset daily counters if it's a new day
+   */
+  private resetDailyIfNeeded(): void {
+    const today = new Date().toISOString().split('T')[0];
+    if (today !== this.lastResetDate) {
+      this.dailyPnl = 0;
+      this.dailyTrades = 0;
+      this.dailyWins = 0;
+      this.dailyLosses = 0;
+      this.lastResetDate = today;
+    }
   }
 
   // ============================================================================
@@ -222,6 +341,9 @@ export class Portfolio extends EventEmitter<PortfolioEvents> {
     // Emit events
     this.emit('position:opened', { position });
 
+    // Save state
+    await this.save();
+
     // Audit log
     logAuditEvent('position_opened' as any, symbol, {
       positionId: id,
@@ -270,11 +392,22 @@ export class Portfolio extends EventEmitter<PortfolioEvents> {
       this.totalLosingTrades++;
     }
 
+    // Check if daily loss limit breached after this trade
+    if (this.dailyPnl <= -this.config.maxDailyLoss) {
+      this.emit('risk:breached', { 
+        type: 'daily_loss_limit', 
+        details: { dailyPnl: this.dailyPnl, limit: this.config.maxDailyLoss } 
+      });
+    }
+
     // Remove from active positions
     this.positions.delete(symbol);
 
     // Emit events
     this.emit('position:closed', { position, pnl });
+
+    // Save state
+    await this.save();
 
     // Audit log
     logAuditEvent('position_closed' as any, symbol, {
@@ -316,6 +449,11 @@ export class Portfolio extends EventEmitter<PortfolioEvents> {
         position.unrealizedPnl = position.side === 'long'
           ? (price - position.entryPrice) * position.amount
           : (position.entryPrice - price) * position.amount;
+        
+        // Compute combined P&L and percentage
+        position.pnl = (position.unrealizedPnl || 0) + (position.realizedPnl || 0);
+        const entryValue = position.entryPrice * position.amount;
+        position.pnlPercent = entryValue > 0 ? (position.pnl / entryValue) * 100 : 0;
       }
     }
   }
@@ -552,6 +690,6 @@ export class Portfolio extends EventEmitter<PortfolioEvents> {
 // Factory
 // ============================================================================
 
-export function createPortfolio(config?: PortfolioConfig): Portfolio {
-  return new Portfolio(config);
+export function createPortfolio(config?: PortfolioConfig, storage?: Storage, userId?: string): Portfolio {
+  return new Portfolio(config, storage, userId);
 }
