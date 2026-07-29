@@ -4,13 +4,13 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { 
-  TradingBot, 
-  createBot, 
+  TradingAgent, 
+  createAgent, 
   MACrossStrategy, 
   RSIStrategy,
   createMACrossStrategy,
   createRSIStrategy,
-  type BotConfig,
+  type AgentConfig,
   type Strategy,
   type Signal 
 } from '../lib/runner';
@@ -117,7 +117,7 @@ function generateCandles(count: number, startPrice: number): Candle[] {
   return candles;
 }
 
-describe('TradingBot', () => {
+describe('TradingAgent', () => {
   let connector: MockConnector;
   
   beforeEach(() => {
@@ -131,7 +131,7 @@ describe('TradingBot', () => {
   
   it('should create a bot with config', () => {
     const strategy = new MACrossStrategy();
-    const config: BotConfig = {
+    const config: AgentConfig = {
       connectors: [connector],
       strategies: [strategy],
       symbols: ['BTC/USD'],
@@ -140,13 +140,13 @@ describe('TradingBot', () => {
       paperMode: true,
     };
     
-    const bot = createBot(config);
+    const bot = createAgent(config);
     expect(bot).toBeDefined();
     expect(bot.isRunning()).toBe(false);
   });
   
   it('should start and stop', async () => {
-    const bot = createBot({
+    const bot = createAgent({
       connectors: [connector],
       strategies: [],
       symbols: ['BTC/USD'],
@@ -162,7 +162,7 @@ describe('TradingBot', () => {
   });
   
   it('should emit events on start/stop', async () => {
-    const bot = createBot({
+    const agent = createAgent({
       connectors: [connector],
       strategies: [],
       symbols: ['BTC/USD'],
@@ -173,18 +173,18 @@ describe('TradingBot', () => {
     const started = vi.fn();
     const stopped = vi.fn();
     
-    bot.on('bot:started', started);
-    bot.on('bot:stopped', stopped);
+    agent.on('agent:started', started);
+    agent.on('agent:stopped', stopped);
     
-    await bot.start();
+    await agent.start();
     expect(started).toHaveBeenCalled();
     
-    await bot.stop();
+    await agent.stop();
     expect(stopped).toHaveBeenCalled();
   });
   
   it('should not start if already running', async () => {
-    const bot = createBot({
+    const bot = createAgent({
       connectors: [connector],
       strategies: [],
       symbols: ['BTC/USD'],
@@ -200,7 +200,7 @@ describe('TradingBot', () => {
   });
   
   it('should get positions', async () => {
-    const bot = createBot({
+    const bot = createAgent({
       connectors: [connector],
       strategies: [],
       symbols: ['BTC/USD'],
@@ -217,7 +217,7 @@ describe('TradingBot', () => {
   });
   
   it('should get portfolio summary', async () => {
-    const bot = createBot({
+    const bot = createAgent({
       connectors: [connector],
       strategies: [],
       symbols: ['BTC/USD'],

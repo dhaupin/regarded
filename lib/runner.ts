@@ -1,20 +1,21 @@
 /**
- * Trading Bot Runner
+ * Trading Agent Runner
  * 
  * Core execution engine for the regarded trading platform.
+ * Agent-first design - works standalone or with Vant/Hermes.
  * Coordinates strategies, connectors, rules, and position management.
  * 
  * @example
- * import { TradingBot, createBot } from './runner';
+ * import { TradingAgent, createAgent } from './runner';
  * 
- * const bot = createBot({
+ * const agent = createAgent({
  *   connectors: [new KrakenConnector()],
  *   strategies: [new MACrossStrategy()],
  * });
  * 
- * await bot.start();
- * // Bot is now running strategies on schedule
- * await bot.stop();
+ * await agent.start();
+ * // Agent is now running strategies on schedule
+ * await agent.stop();
  */
 
 import { EventEmitter } from './event';
@@ -28,7 +29,7 @@ import { Scheduler, createScheduler, Job } from './scheduler';
 // Types
 // ============================================================================
 
-export interface BotConfig {
+export interface AgentConfig {
   /** Connectors to use for trading */
   connectors: ExchangeConnector[];
   /** Strategies to run */
@@ -124,9 +125,9 @@ export interface Strategy {
 // ============================================================================
 
 export interface RunnerEvents {
-  'bot:started': { config: BotConfig };
-  'bot:stopped': {};
-  'bot:error': { error: string; timestamp: number };
+  'agent:started': { config: AgentConfig };
+  'agent:stopped': {};
+  'agent:error': { error: string; timestamp: number };
   'tick:start': { timestamp: number; tick: number };
   'tick:complete': { timestamp: number; tick: number; duration: number };
   'signal:generated': { signal: Signal; strategy: string };
@@ -142,11 +143,11 @@ export interface RunnerEvents {
 }
 
 // ============================================================================
-// TradingBot
+// TradingAgent
 // ============================================================================
 
-export class TradingBot extends EventEmitter<RunnerEvents> {
-  private config: BotConfig;
+export class TradingAgent extends EventEmitter<RunnerEvents> {
+  private config: AgentConfig;
   private running: boolean = false;
   private tickCount: number = 0;
   private scheduler: Scheduler;
@@ -154,7 +155,7 @@ export class TradingBot extends EventEmitter<RunnerEvents> {
   private dailyTrades: number = 0;
   private dailyPnl: number = 0;
   
-  constructor(config: BotConfig) {
+  constructor(config: AgentConfig) {
     super();
     this.config = {
       tickInterval: config.tickInterval ?? 60000,
@@ -172,11 +173,11 @@ export class TradingBot extends EventEmitter<RunnerEvents> {
   }
   
   /**
-   * Start the trading bot
+   * Start the trading agent
    */
   async start(): Promise<void> {
     if (this.running) {
-      throw new Error('Bot is already running');
+      throw new Error('Agent is already running');
     }
     
     this.running = true;
@@ -187,7 +188,7 @@ export class TradingBot extends EventEmitter<RunnerEvents> {
       try {
         await connector.connect({} as any);
       } catch (e) {
-        this.emit('bot:error', { 
+        this.emit('agent:error', { 
           error: `Failed to connect ${connector.name}: ${e}`, 
           timestamp: Date.now() 
         });
@@ -197,7 +198,7 @@ export class TradingBot extends EventEmitter<RunnerEvents> {
     // Start the tick loop
     this.scheduleTick();
     
-    this.emit('bot:started', { config: this.config });
+    this.emit('agent:started', { config: this.config });
   }
   
   /**
@@ -222,7 +223,7 @@ export class TradingBot extends EventEmitter<RunnerEvents> {
       }
     }
     
-    this.emit('bot:stopped', {});
+    this.emit('agent:stopped', {});
   }
   
   /**
@@ -316,7 +317,7 @@ export class TradingBot extends EventEmitter<RunnerEvents> {
       // Schedule next tick
       setTimeout(() => this.scheduleTick(), this.config.tickInterval);
     }).catch((error) => {
-      this.emit('bot:error', { 
+      this.emit('agent:error', { 
         error: `Tick error: ${error}`, 
         timestamp: Date.now() 
       });
@@ -376,7 +377,7 @@ export class TradingBot extends EventEmitter<RunnerEvents> {
       }
     } catch (error) {
       // Strategy error - log but continue
-      this.emit('bot:error', { 
+      this.emit('agent:error', { 
         error: `Strategy ${strategy.id} error: ${error}`, 
         timestamp: Date.now() 
       });
@@ -691,9 +692,19 @@ export class RSIStrategy implements Strategy {
 // Factory
 // ============================================================================
 
-export function createBot(config: BotConfig): TradingBot {
-  return new TradingBot(config);
+export function createAgent(config: AgentConfig): TradingAgent {
+  return new TradingAgent(config);
 }
+
+/**
+ * @deprecated Use createAgent instead
+ */
+export const createBot = createAgent;
+
+/**
+ * @deprecated Use TradingAgent instead
+ */
+export const TradingBot = TradingAgent;
 
 export function createMACrossStrategy(): Strategy {
   return new MACrossStrategy();
