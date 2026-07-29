@@ -246,6 +246,9 @@ export class AgentGuard {
   // New: Price staleness tracking
   private lastPriceUpdate: Map<string, number> = new Map();
   
+  // New: API rate limiting
+  private apiCallTimestamps: number[] = [];
+  
   constructor(config: GuardConfig = {}) {
     this.config = {
       maxPositions: config.maxPositions ?? 5,
@@ -784,6 +787,39 @@ export class AgentGuard {
       }
     }
     return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check API rate limit
+   */
+  checkAPIRateLimit(): GuardResult {
+    const limit = this.config.maxAPICallsPerMinute;
+    if (limit <= 0) {
+      return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+    }
+    
+    const now = Date.now();
+    const windowMs = 60 * 1000; // 1 minute window
+    
+    // Clean old timestamps
+    this.apiCallTimestamps = this.apiCallTimestamps.filter(ts => now - ts < windowMs);
+    
+    if (this.apiCallTimestamps.length >= limit) {
+      return {
+        allowed: false,
+        reason: `API rate limit: ${this.apiCallTimestamps.length}/${limit} calls in last minute`,
+        reasonCode: GuardReasonCode.API_RATE_LIMIT,
+      };
+    }
+    
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Record an API call
+   */
+  recordAPICall(): void {
+    this.apiCallTimestamps.push(Date.now());
   }
   
   /**
@@ -1357,6 +1393,16 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
         valid: false,
         action: 'block',
         reason: newsCheck.reason,
+      };
+    }
+    
+    // Check API rate limit
+    const rateLimitCheck = this.guard.checkAPIRateLimit();
+    if (!rateLimitCheck.allowed) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: rateLimitCheck.reason,
       };
     }
     

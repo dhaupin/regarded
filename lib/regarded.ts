@@ -33,7 +33,7 @@ export * from './auth';
 // Config
 export * from './config';
 
-// Storage
+// Utils & Storage (combined)
 export * from './storage';
 
 // Connectors
@@ -48,9 +48,6 @@ export * from './patterns';
 // Rules
 export * from './rules';
 
-// Utils
-export * from './utils';
-
 // Event System
 export * from './event';
 
@@ -59,6 +56,12 @@ export * from './cache';
 
 // API / HTTP Handlers
 export * from './api';
+
+// Backtest Validator
+export * from './backtest';
+
+// News Service
+export * from './news';
 
 // Runner / Trading Agent
 export * from './runner';

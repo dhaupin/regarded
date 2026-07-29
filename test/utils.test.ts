@@ -11,7 +11,7 @@ import {
   intervalToMs, normalizePair, parsePair, calculatePositionValue, calculatePositionSize,
   isValidEmail, isValidPair, isValidInterval,
   createError, safeJsonParse,
-} from '../lib/utils';
+} from '../lib/storage';
 
 describe('Utils', () => {
   describe('Date/Time', () => {
