@@ -475,6 +475,25 @@ cd frontend && npm run build && npx wrangler pages deploy frontend/dist
 
 ---
 
+## Roadmap & Integrations
+
+### Vant Integration (Priority: High)
+Vant (https://github.com/AI-H虔u/vant) is a memory/experience system for AI agents.
+
+**Goals:**
+- Store agent experiences and learnings
+- Session persistence across restarts
+- Strategy performance tracking
+- Guard/Rules configuration versioning
+
+**Implementation Ideas:**
+- Create `lib/vant.ts` adapter
+- Store guard configs in Vant memory
+- Track strategy performance metrics
+- Persist agent state across deployments
+
+---
+
 ## Future Considerations
 
 - Python engine for complex analysis
@@ -482,6 +501,7 @@ cd frontend && npm run build && npx wrangler pages deploy frontend/dist
 - Backtesting module
 - Multi-sig wallet support
 - Telegram/Discord notifications
+- Vant memory integration
 
 ---
 

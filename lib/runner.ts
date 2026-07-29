@@ -123,40 +123,68 @@ export interface GuardConfig {
   tradingTimezone?: string;
   /** Enable DST handling for trading hours (default: true) */
   enableDST?: boolean;
+  /** Custom trading schedule by day of week (0=Sun, 6=Sat) */
+  tradingSchedule?: TradingSchedule;
   /** Enable circuit breaker on exchange failures (default: true) */
   enableCircuitBreaker?: boolean;
   /** Circuit breaker failure threshold (default: 5) */
   circuitFailureThreshold?: number;
-  /** === NEW: Max drawdown % from peak (default: 20%) */
+  /** Max drawdown % from peak (default: 20%) */
   maxDrawdownPercent?: number;
-  /** === NEW: Order timeout in ms (default: 30000 = 30s) */
+  /** Order timeout in ms (default: 30000 = 30s) */
   orderTimeoutMs?: number;
-  /** === NEW: Enable order retry on failure (default: true) */
+  /** Enable order retry on failure (default: true) */
   enableOrderRetry?: boolean;
-  /** === NEW: Max retry attempts (default: 3) */
+  /** Max retry attempts (default: 3) */
   maxRetryAttempts?: number;
-  /** === NEW: Enable partial fill handling (default: true) */
+  /** Enable partial fill handling (default: true) */
   allowPartialFills?: number;
-  /** === NEW: Max staleness age for prices in ms (default: 60000 = 1min) */
+  /** Max staleness age for prices in ms (default: 60000 = 1min) */
   maxPriceStalenessMs?: number;
-  /** === NEW: Emergency stop - kill all trading (default: false) */
+  /** Emergency stop - kill all trading (default: false) */
   emergencyStop?: boolean;
-  /** === NEW: Skip weekend trading (default: false) */
+  /** Skip weekend trading (default: false) */
   skipWeekends?: boolean;
-  /** === NEW: Market types to trade (default: all) */
+  /** Market types to trade (default: all) */
   markets?: ('crypto' | 'forex' | 'stock' | 'futures')[];
-  /** === NEW: Min signal confidence 0-100 (default: 50) */
+  /** Min signal confidence 0-100 (default: 50) */
   minSignalConfidence?: number;
-  /** === NEW: Max % of portfolio in single position (default: 30%) */
+  /** Max % of portfolio in single position (default: 30%) */
   maxPositionConcentration?: number;
-  /** === NEW: Max leverage (default: 1) */
+  /** Max leverage (default: 1) */
   maxLeverage?: number;
-  /** === NEW: News blackout - no trading during major events (default: false) */
+  /** News blackout - no trading during major events (default: false) */
   newsBlackout?: boolean;
-  /** === NEW: Min volatility for trades (ATR as % of price) */
+  /** Min volatility for trades (ATR as % of price) */
   minVolatilityPercent?: number;
-  /** === NEW: Max volatility - reduce size in high vol */
+  /** Max volatility - reduce size in high vol */
   maxVolatilityPercent?: number;
+  /** Min reserve balance - keep cash on hand (default: 0) */
+  minReserveBalance?: number;
+  /** Max correlation between positions (0-1, default: 0.7) */
+  maxCorrelation?: number;
+  /** Require backtest validation before trading new strategies (default: false) */
+  requireBacktest?: boolean;
+  /** Max API calls per minute (default: 120) */
+  maxAPICallsPerMinute?: number;
+  /** News blackout events (list of event times or keywords) */
+  newsBlackoutPeriods?: NewsBlackoutPeriod[];
+}
+
+/** Custom trading schedule by day of week */
+export interface TradingSchedule {
+  /** Map of day (0-6) to trading windows. Null = no trading that day */
+  [day: number]: { startHour: number; endHour: number } | null;
+}
+
+/** News blackout period */
+export interface NewsBlackoutPeriod {
+  /** Start time (ISO string or timestamp) */
+  start: number | string;
+  /** End time (ISO string or timestamp) */
+  end: number | string;
+  /** Optional reason/description */
+  reason?: string;
 }
 
 export interface GuardResult {
@@ -189,6 +217,12 @@ export enum GuardReasonCode {
   NEWS_BLACKOUT = 'news_blackout',
   LOW_VOLATILITY = 'low_volatility',
   HIGH_VOLATILITY = 'high_volatility',
+  // New
+  RESERVE_BALANCE = 'reserve_balance',
+  CORRELATION = 'correlation',
+  BACKTEST_REQUIRED = 'backtest_required',
+  API_RATE_LIMIT = 'api_rate_limit',
+  TRADING_DAY_CLOSED = 'trading_day_closed',
 }
 
 export class AgentGuard {
@@ -240,6 +274,15 @@ export class AgentGuard {
       newsBlackout: config.newsBlackout ?? false,
       minVolatilityPercent: config.minVolatilityPercent ?? 0,
       maxVolatilityPercent: config.maxVolatilityPercent ?? 100,
+      // New: Reserve, correlation, backtest, API rate
+      minReserveBalance: config.minReserveBalance ?? 0,
+      maxCorrelation: config.maxCorrelation ?? 0.7,
+      requireBacktest: config.requireBacktest ?? false,
+      maxAPICallsPerMinute: config.maxAPICallsPerMinute ?? 120,
+      // Trading schedule
+      tradingSchedule: config.tradingSchedule ?? null,
+      // News blackout
+      newsBlackoutPeriods: config.newsBlackoutPeriods ?? [],
     };
   }
   
@@ -666,6 +709,117 @@ export class AgentGuard {
         reasonCode: GuardReasonCode.HIGH_VOLATILITY,
       };
     }
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check reserve balance - keep cash on hand
+   */
+  checkReserveBalance(availableBalance: number): GuardResult {
+    if (availableBalance < this.config.minReserveBalance) {
+      return {
+        allowed: false,
+        reason: `Available balance $${availableBalance.toFixed(2)} below minimum reserve $${this.config.minReserveBalance}`,
+        reasonCode: GuardReasonCode.RESERVE_BALANCE,
+      };
+    }
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check correlation between positions (simplified)
+   * In production, you'd calculate actual correlation matrix
+   */
+  checkCorrelation(positionSymbols: string[], newSymbol: string): GuardResult {
+    if (positionSymbols.length === 0) {
+      return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+    }
+    
+    // Simplified: Check if new symbol is in same "sector" as existing
+    // In production, use actual price correlation
+    const correlatedSymbols = positionSymbols.filter(s => {
+      // Same base asset = high correlation (e.g., BTC/USD vs BTC/EUR)
+      const base1 = s.split('/')[0];
+      const base2 = newSymbol.split('/')[0];
+      return base1 === base2;
+    });
+    
+    // If too many correlated positions, block
+    const correlationRatio = correlatedSymbols.length / positionSymbols.length;
+    if (correlationRatio > this.config.maxCorrelation) {
+      return {
+        allowed: false,
+        reason: `Correlation ${(correlationRatio * 100).toFixed(0)}% exceeds max ${(this.config.maxCorrelation * 100).toFixed(0)}%`,
+        reasonCode: GuardReasonCode.CORRELATION,
+      };
+    }
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check if news blackout is active
+   */
+  checkNewsBlackout(): GuardResult {
+    if (!this.config.newsBlackout) {
+      return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+    }
+    
+    const now = Date.now();
+    for (const period of this.config.newsBlackoutPeriods) {
+      const start = typeof period.start === 'string' ? new Date(period.start).getTime() : period.start;
+      const end = typeof period.end === 'string' ? new Date(period.end).getTime() : period.end;
+      
+      if (now >= start && now <= end) {
+        return {
+          allowed: false,
+          reason: `News blackout active: ${period.reason || 'Major event'}`,
+          reasonCode: GuardReasonCode.NEWS_BLACKOUT,
+        };
+      }
+    }
+    return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check trading schedule (custom days/hours)
+   */
+  checkTradingSchedule(): GuardResult {
+    const schedule = this.config.tradingSchedule;
+    if (!schedule) {
+      // Use simple hours if no custom schedule
+      if (this.isWithinTradingHours()) {
+        return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
+      }
+      return {
+        allowed: false,
+        reason: `Outside trading hours (${this.config.tradingStartHour}:00-${this.config.tradingEndHour}:00)`,
+        reasonCode: GuardReasonCode.TRADING_HOURS,
+      };
+    }
+    
+    // Check custom schedule
+    const now = new Date();
+    const day = now.getDay();
+    const hour = now.getHours();
+    
+    const daySchedule = schedule[day];
+    if (!daySchedule) {
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      return {
+        allowed: false,
+        reason: `${dayNames[day]} - trading not scheduled`,
+        reasonCode: GuardReasonCode.TRADING_DAY_CLOSED,
+      };
+    }
+    
+    if (hour < daySchedule.startHour || hour >= daySchedule.endHour) {
+      return {
+        allowed: false,
+        reason: `Outside trading hours (${daySchedule.startHour}:00-${daySchedule.endHour}:00)`,
+        reasonCode: GuardReasonCode.TRADING_HOURS,
+      };
+    }
+    
     return { allowed: true, reason: 'OK', reasonCode: GuardReasonCode.OK };
   }
 }
