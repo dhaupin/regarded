@@ -5,25 +5,25 @@
  * Inspired by Vant's event system.
  */
 
-type EventCallback = (data: any) => void;
+type EventCallback<T = any> = (data: T) => void;
 
 interface EventMap {
   [event: string]: EventCallback[];
 }
 
 /**
- * Event Emitter
+ * Generic Event Emitter
  */
-export class EventEmitter {
+export class EventEmitter<Events extends Record<string, any> = Record<string, any>> {
   private events: EventMap = {};
   private onceEvents: EventMap = {};
   
   /**
    * Subscribe to an event
    */
-  on(event: string, callback: EventCallback): () => void {
-    if (!this.events[event]) this.events[event] = [];
-    this.events[event].push(callback);
+  on<K extends keyof Events>(event: K, callback: EventCallback<Events[K]>): () => void {
+    if (!this.events[event as string]) this.events[event as string] = [];
+    this.events[event as string].push(callback as EventCallback);
     
     // Return unsubscribe function
     return () => this.off(event, callback);
@@ -32,35 +32,35 @@ export class EventEmitter {
   /**
    * Subscribe to an event once
    */
-  once(event: string, callback: EventCallback): void {
-    if (!this.onceEvents[event]) this.onceEvents[event] = [];
-    this.onceEvents[event].push(callback);
+  once<K extends keyof Events>(event: K, callback: EventCallback<Events[K]>): void {
+    if (!this.onceEvents[event as string]) this.onceEvents[event as string] = [];
+    this.onceEvents[event as string].push(callback as EventCallback);
   }
   
   /**
    * Unsubscribe from an event
    */
-  off(event: string, callback: EventCallback): void {
-    if (this.events[event]) {
-      this.events[event] = this.events[event].filter(cb => cb !== callback);
+  off<K extends keyof Events>(event: K, callback: EventCallback<Events[K]>): void {
+    if (this.events[event as string]) {
+      this.events[event as string] = this.events[event as string].filter(cb => cb !== callback);
     }
   }
   
   /**
    * Emit an event
    */
-  emit(event: string, data?: any): void {
+  emit<K extends keyof Events>(event: K, data?: Events[K]): void {
     // Handle one-time listeners
-    if (this.onceEvents[event]) {
-      for (const callback of this.onceEvents[event]) {
+    if (this.onceEvents[event as string]) {
+      for (const callback of this.onceEvents[event as string]) {
         try { callback(data); } catch (e) { console.error(`Event error: ${event}`, e); }
       }
-      delete this.onceEvents[event];
+      delete this.onceEvents[event as string];
     }
     
     // Handle persistent listeners
-    if (this.events[event]) {
-      for (const callback of this.events[event]) {
+    if (this.events[event as string]) {
+      for (const callback of this.events[event as string]) {
         try { callback(data); } catch (e) { console.error(`Event error: ${event}`, e); }
       }
     }
@@ -93,10 +93,10 @@ export class EventEmitter {
 export const events = new EventEmitter();
 
 // Convenience methods
-export const on = (event: string, callback: EventCallback) => events.on(event, callback);
-export const once = (event: string, callback: EventCallback) => events.once(event, callback);
-export const off = (event: string, callback: EventCallback) => events.off(event, callback);
-export const emit = (event: string, data?: any) => events.emit(event, data);
+export const on = (event: string, callback: EventCallback) => events.on(event as any, callback);
+export const once = (event: string, callback: EventCallback) => events.once(event as any, callback);
+export const off = (event: string, callback: EventCallback) => events.off(event as any, callback);
+export const emit = (event: string, data?: any) => events.emit(event as any, data);
 
 // Named event exports for type safety
 export const TradingEvents = {

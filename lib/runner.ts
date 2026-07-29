@@ -1329,6 +1329,37 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   private async validateSignal(signal: Signal): Promise<ValidationResult> {
     const connector = this.config.connectors[0];
     
+    // Check trading schedule
+    const scheduleCheck = this.guard.checkTradingSchedule();
+    if (!scheduleCheck.allowed) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: scheduleCheck.reason,
+      };
+    }
+    
+    // Check signal confidence (strength 0-1 -> 0-100%)
+    const confidencePercent = (signal.strength || 0.5) * 100;
+    const confidenceCheck = this.guard.checkSignalConfidence(confidencePercent);
+    if (!confidenceCheck.allowed) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: confidenceCheck.reason,
+      };
+    }
+    
+    // Check news blackout
+    const newsCheck = this.guard.checkNewsBlackout();
+    if (!newsCheck.allowed) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: newsCheck.reason,
+      };
+    }
+    
     // Check price staleness before validating
     const lastUpdate = (this.guard as any).lastPriceUpdate?.get(signal.symbol) ?? 0;
     const stalenessCheck = this.guard.checkPriceStaleness(signal.symbol, lastUpdate);
@@ -1345,12 +1376,44 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     const balance = balances.find(b => b.asset === signal.symbol.split('/')[1]);
     const availableBalance = balance?.available ?? 0;
     
+    // Check reserve balance
+    const reserveCheck = this.guard.checkReserveBalance(availableBalance);
+    if (!reserveCheck.allowed) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: reserveCheck.reason,
+      };
+    }
+    
     // Get position
     const position = this.positions.get(signal.symbol);
     const positionSize = position ? position.amount * position.entryPrice : 0;
     
     // Get portfolio value
     const portfolio = await this.getPortfolio();
+    
+    // Check position concentration
+    const orderValue = signal.price * (signal.price > 0 ? (100 / signal.price) : 0);
+    const concentrationCheck = this.guard.checkPositionConcentration(orderValue, portfolio.totalValue);
+    if (!concentrationCheck.allowed) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: concentrationCheck.reason,
+      };
+    }
+    
+    // Check correlation with existing positions
+    const positionSymbols = Array.from(this.positions.keys());
+    const correlationCheck = this.guard.checkCorrelation(positionSymbols, signal.symbol);
+    if (!correlationCheck.allowed) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: correlationCheck.reason,
+      };
+    }
     
     // Build context
     const context: OrderContext = {
@@ -1687,16 +1750,6 @@ export class RSIStrategy implements Strategy {
 export function createAgent(config: AgentConfig): TradingAgent {
   return new TradingAgent(config);
 }
-
-/**
- * @deprecated Use createAgent instead
- */
-export const createBot = createAgent;
-
-/**
- * @deprecated Use TradingAgent instead
- */
-export const TradingBot = TradingAgent;
 
 export function createMACrossStrategy(): Strategy {
   return new MACrossStrategy();

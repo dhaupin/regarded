@@ -4,7 +4,7 @@
  * Common helper functions used throughout the codebase.
  */
 
-import type { CandleInterval } from '../core/types';
+import type { CandleInterval } from './types';
 
 // ============================================================================
 // Date/Time Utilities
