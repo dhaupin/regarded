@@ -28,6 +28,7 @@ import { QoSManager, createQoSManager, CircuitState } from './qos';
 import { logAuditEvent, AuditEventType, RiskLevel } from './audit';
 import { createError, ErrorCode } from './error';
 import { createMarketPsychology, PsychologyConfig, PsychologyResult, NewsAnalysis, createNewsAnalysis } from './psy';
+import { Portfolio, createPortfolio, type Position } from './portfolio';
 
 // ============================================================================
 // Types
@@ -972,9 +973,7 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   private running: boolean = false;
   private tickCount: number = 0;
   private scheduler: Scheduler;
-  private positions: Map<string, Position> = new Map();
-  private dailyTrades: number = 0;
-  private dailyPnl: number = 0;
+  private portfolio: Portfolio;
   private guard: AgentGuard;
   private qos: QoSManager;
   private backtest: import('./backtest').BacktestValidator | null = null;
@@ -991,6 +990,13 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     
     // Create scheduler
     this.scheduler = createScheduler({ enableHeartbeat: false });
+    
+    // Create portfolio with guard config
+    this.portfolio = createPortfolio({
+      maxPositions: config.guard?.maxPositions ?? 5,
+      maxDailyLoss: config.guard?.maxDailyLoss ?? 1000,
+      maxDailyTrades: config.guard?.maxDailyTrades ?? 20,
+    });
     
     // Create guard with config or defaults
     this.guard = createAgentGuard(config.guard);
@@ -1096,16 +1102,17 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     await this.scheduler.stop();
     
     // Graceful shutdown: close all positions
-    if (closePositions && this.positions.size > 0) {
+    const positions = this.portfolio.getAllPositions();
+    if (closePositions && positions.length > 0) {
       const connector = this.config.connectors[0];
       
-      for (const [symbol, position] of this.positions) {
+      for (const position of positions) {
         try {
-          const currentPrice = await connector.getPrice(symbol);
-          await this.closePosition(symbol, currentPrice, 'Graceful shutdown');
+          const currentPrice = await connector.getPrice(position.symbol);
+          await this.closePosition(position.symbol, currentPrice, 'Graceful shutdown');
         } catch (e) {
           this.emit('agent:error', { 
-            error: `Failed to close position ${symbol}: ${e}`, 
+            error: `Failed to close position ${position.symbol}: ${e}`, 
             timestamp: Date.now() 
           });
         }
@@ -1135,14 +1142,14 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
    * Get current positions
    */
   getPositions(): Position[] {
-    return Array.from(this.positions.values());
+    return this.portfolio.getAllPositions();
   }
   
   /**
    * Get position for a symbol
    */
   getPosition(symbol: string): Position | undefined {
-    return this.positions.get(symbol);
+    return this.portfolio.getPosition(symbol);
   }
   
   /**
@@ -1204,12 +1211,13 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     dailyTrades: number;
     dailyLoss: number;
   } {
+    const dailyStats = this.portfolio.getDailyStats();
     return {
       emergencyStop: (this.guard as any).config?.emergencyStop ?? false,
       drawdown: this.guard.getCurrentDrawdown(),
       peakValue: (this.guard as any).peakValue ?? 0,
-      dailyTrades: this.dailyTrades,
-      dailyLoss: this.dailyPnl,
+      dailyTrades: dailyStats.trades,
+      dailyLoss: dailyStats.pnl,
     };
   }
   
@@ -1227,10 +1235,14 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     
     const availableBalance = balances.reduce((sum, b) => sum + b.available, 0);
     
-    // Calculate positions value and P&L
-    for (const position of this.positions.values()) {
+    // Get positions and update prices
+    const positions = this.portfolio.getAllPositions();
+    
+    for (const position of positions) {
       const currentPrice = await connector.getPrice(position.symbol);
-      position.currentPrice = currentPrice;
+      
+      // Update price in portfolio
+      this.portfolio.updatePrices(new Map([[position.symbol, currentPrice]]));
       
       // Record price for staleness tracking
       this.guard.recordPriceUpdate(position.symbol, Date.now());
@@ -1238,20 +1250,16 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       const positionValue = position.amount * currentPrice;
       positionsValue += positionValue;
       
-      const pnl = position.side === 'long'
-        ? (currentPrice - position.entryPrice) * position.amount
-        : (position.entryPrice - currentPrice) * position.amount;
-      
-      position.pnl = pnl;
-      position.pnlPercent = (pnl / (position.entryPrice * position.amount)) * 100;
-      totalPnl += pnl;
+      totalPnl += position.unrealizedPnl || 0;
     }
     
     totalValue = availableBalance + positionsValue;
-    const totalPnlPercent = totalValue > 0 ? (totalPnl / (totalValue - totalPnl)) * 100 : 0;
+    const totalPnlPercent = totalValue > 0 ? (totalPnl / (totalValue - totalPnl || 1)) * 100 : 0;
     
     // Update drawdown tracking
     this.guard.updateDrawdown(totalValue);
+    
+    const dailyStats = this.portfolio.getDailyStats();
     
     return {
       totalValue,
@@ -1259,9 +1267,9 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       positionsValue,
       totalPnl,
       totalPnlPercent,
-      positions: Array.from(this.positions.values()),
-      dailyPnl: this.dailyPnl,
-      dailyTrades: this.dailyTrades,
+      positions: this.portfolio.getAllPositions(),
+      dailyPnl: dailyStats.pnl,
+      dailyTrades: dailyStats.trades,
     };
   }
   
@@ -1278,14 +1286,15 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     riskLevel: RiskLevel = 'low'
   ): Promise<void> {
     try {
+      const dailyStats = this.portfolio.getDailyStats();
       await logAuditEvent(
         eventType,
         'trading-agent',
         { 
           ...details,
           tick: this.tickCount,
-          positions: this.positions.size,
-          dailyTrades: this.dailyTrades,
+          positions: this.portfolio.getPositionsCount(),
+          dailyTrades: dailyStats.trades,
         },
         riskLevel
       );
@@ -1350,13 +1359,14 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
    * Check stop loss and take profit on all positions
    */
   private async checkPositionGuards(): Promise<void> {
-    for (const [symbol, position] of this.positions) {
+    const positions = this.portfolio.getAllPositions();
+    for (const position of positions) {
       // Check stop loss
       const stopLossResult = this.guard.checkStopLoss(position);
       if (!stopLossResult.allowed) {
         const connector = this.config.connectors[0];
-        const currentPrice = await connector.getPrice(symbol);
-        await this.closePosition(symbol, currentPrice, stopLossResult.reason);
+        const currentPrice = await connector.getPrice(position.symbol);
+        await this.closePosition(position.symbol, currentPrice, stopLossResult.reason);
         continue;
       }
       
@@ -1364,8 +1374,8 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       const takeProfitResult = this.guard.checkTakeProfit(position);
       if (!takeProfitResult.allowed) {
         const connector = this.config.connectors[0];
-        const currentPrice = await connector.getPrice(symbol);
-        await this.closePosition(symbol, currentPrice, takeProfitResult.reason);
+        const currentPrice = await connector.getPrice(position.symbol);
+        await this.closePosition(position.symbol, currentPrice, takeProfitResult.reason);
       }
     }
   }
@@ -1600,15 +1610,16 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     }
     
     // Get position
-    const position = this.positions.get(signal.symbol);
+    const position = this.portfolio.getPosition(signal.symbol);
     const positionSize = position ? position.amount * position.entryPrice : 0;
     
     // Get portfolio value
-    const portfolio = await this.getPortfolio();
+    const portfolioSummary = await this.getPortfolio();
+    const dailyStats = this.portfolio.getDailyStats();
     
     // Check position concentration
     const orderValue = signal.price * (signal.price > 0 ? (100 / signal.price) : 0);
-    const concentrationCheck = this.guard.checkPositionConcentration(orderValue, portfolio.totalValue);
+    const concentrationCheck = this.guard.checkPositionConcentration(orderValue, portfolioSummary.totalValue);
     if (!concentrationCheck.allowed) {
       return {
         valid: false,
@@ -1618,7 +1629,7 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     }
     
     // Check correlation with existing positions
-    const positionSymbols = Array.from(this.positions.keys());
+    const positionSymbols = this.portfolio.getAllPositions().map(p => p.symbol);
     const correlationCheck = this.guard.checkCorrelation(positionSymbols, signal.symbol);
     if (!correlationCheck.allowed) {
       return {
@@ -1642,9 +1653,9 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       availableBalance,
       currentPrice: signal.price,
       positionSize,
-      dailyTradeCount: this.dailyTrades,
-      dailyLoss: this.dailyPnl,
-      portfolioValue: portfolio.totalValue,
+      dailyTradeCount: dailyStats.trades,
+      dailyLoss: dailyStats.pnl,
+      portfolioValue: portfolioSummary.totalValue,
     };
     
     // Run custom rules validator if provided
@@ -1672,11 +1683,11 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     const connector = this.config.connectors[0];
     
     // Check guard before executing
-    const portfolio = await this.getPortfolio();
+    const portfolioSummary = await this.getPortfolio();
     const guardResult = this.guard.checkNewPosition(
-      this.positions.size,
-      portfolio.totalValue,
-      portfolio.dailyPnl
+      this.portfolio.getPositionsCount(),
+      portfolioSummary.totalValue,
+      portfolioSummary.dailyPnl
     );
     
     if (!guardResult.allowed) {
@@ -1686,7 +1697,7 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     }
     
     // Check for existing position
-    const existingPosition = this.positions.get(signal.symbol);
+    const existingPosition = this.portfolio.getPosition(signal.symbol);
     
     // If we have a position and signal is opposite, close it
     if (existingPosition) {
@@ -1700,7 +1711,7 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     }
     
     // Open new position if no existing
-    if (!this.positions.has(signal.symbol)) {
+    if (!this.portfolio.hasPosition(signal.symbol)) {
       await this.openPosition(signal);
     }
   }
@@ -1730,34 +1741,31 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       );
       execution.result = result;
       
-      // Create position
-      const position: Position = {
+      // Open position in portfolio
+      const positionResult = await this.portfolio.openPosition({
         id: result.id,
         symbol: signal.symbol,
         side: signal.side === 'buy' ? 'long' : 'short',
         entryPrice: result.avg_price,
         amount: result.filled_amount,
-        currentPrice: result.avg_price,
-        pnl: 0,
-        pnlPercent: 0,
-        openedAt: Date.now(),
-      };
+      });
       
-      this.positions.set(signal.symbol, position);
-      this.dailyTrades++;
+      if (!positionResult.success) {
+        throw new Error(positionResult.error || 'Failed to open position');
+      }
       
       // Record trade in guard
       this.guard.recordTrade();
       
       this.emit('order:placed', { execution });
-      this.emit('position:opened', { position });
+      this.emit('position:opened', { position: positionResult.position! });
       
       // Audit log
       await this.logAudit('trade_executed', {
-        symbol: position.symbol,
-        side: position.side,
-        amount: position.amount,
-        entryPrice: position.entryPrice,
+        symbol: positionResult.position!.symbol,
+        side: positionResult.position!.side,
+        amount: positionResult.position!.amount,
+        entryPrice: positionResult.position!.entryPrice,
       }, 'medium');
       
     } catch (error) {
@@ -1773,7 +1781,7 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   }
   
   private async closePosition(symbol: string, currentPrice: number, reason: string = 'Signal reversal'): Promise<void> {
-    const position = this.positions.get(symbol);
+    const position = this.portfolio.getPosition(symbol);
     if (!position) return;
     
     const connector = this.config.connectors[0];
@@ -1807,31 +1815,28 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       const result = await connector.placeOrder(order);
       execution.result = result;
       
-      // Calculate P&L
-      const pnl = position.side === 'long'
-        ? (currentPrice - position.entryPrice) * position.amount
-        : (position.entryPrice - currentPrice) * position.amount;
+      // Close position via portfolio
+      const closeResult = await this.portfolio.closePosition(symbol, currentPrice, reason);
       
-      this.dailyPnl += pnl;
+      if (!closeResult.success) {
+        throw new Error(closeResult.error || 'Failed to close position');
+      }
       
       // Record profit/loss in guard
+      const pnl = closeResult.pnl || 0;
       if (pnl < 0) {
         this.guard.recordLoss(pnl);
       } else {
         this.guard.recordProfit(pnl);
       }
       
-      // Close position
-      position.closedAt = Date.now();
-      this.positions.delete(symbol);
-      
       this.emit('order:filled', { execution });
-      this.emit('position:closed', { position, pnl });
+      this.emit('position:closed', { position: closeResult.position!, pnl });
       
       // Audit log
       await this.logAudit('trade_executed', {
-        symbol: position.symbol,
-        side: position.side,
+        symbol: closeResult.position!.symbol,
+        side: closeResult.position!.side,
         exitPrice: currentPrice,
         pnl: pnl,
         reason: reason,
