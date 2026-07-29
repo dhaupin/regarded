@@ -5,6 +5,7 @@
  */
 
 import { fetch } from './network';
+import { LRUCache } from './cache';
 
 export interface NewsItem {
   id: string;
@@ -45,11 +46,13 @@ const DEFAULT_CONFIG: NewsConfig = {
 
 export class NewsService {
   private config: NewsConfig;
-  private cache: Map<string, { data: NewsItem[]; expiry: number }> = new Map();
+  private cache: LRUCache<NewsItem[]>;
   private recentNews: NewsItem[] = [];
 
   constructor(config: Partial<NewsConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    // Use LRUCache with TTL for caching news
+    this.cache = new LRUCache<NewsItem[]>(100, this.config.cacheDurationMs);
   }
 
   /**
@@ -59,15 +62,15 @@ export class NewsService {
     const cacheKey = `latest:${options.symbols?.join(',') || 'all'}`;
     const cached = this.cache.get(cacheKey);
     
-    if (cached && cached.expiry > Date.now()) {
-      return this.filterNews(cached.data, options);
+    if (cached) {
+      return this.filterNews(cached, options);
     }
 
     // Try to fetch from API if configured
     if (this.config.apiKey && this.config.baseUrl) {
       try {
         const news = await this.fetchFromApi(options);
-        this.cache.set(cacheKey, { data: news, expiry: Date.now() + this.config.cacheDurationMs });
+        this.cache.set(cacheKey, news);
         this.recentNews = news;
         return this.filterNews(news, options);
       } catch (e) {

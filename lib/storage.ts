@@ -312,7 +312,8 @@ export function isValidInterval(interval: string): interval is CandleInterval {
 // ============================================================================
 
 /**
- * Create error with code
+ * Create simple error with code (for utilities)
+ * Note: For full error handling, use createError from './error'
  */
 export function createError(code: string, message: string, details?: any): Error & { code: string; details?: any } {
   const error = new Error(message) as Error & { code: string; details?: any };
