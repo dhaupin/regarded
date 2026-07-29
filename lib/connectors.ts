@@ -16,6 +16,28 @@ export { KrakenConnector } from './connectors/kraken';
 export { SolanaConnector } from './connectors/solana';
 export { JupiterConnector } from './connectors/jupiter';
 
+// Re-export validation types
+export { 
+  ValidationResult, 
+  OrderContext, 
+  ValidationRule,
+  RulesValidator,
+  createRulesValidator,
+  defaultPreRules,
+  defaultPostRules,
+  // Individual rules
+  maxOrderSizeRule,
+  minOrderSizeRule,
+  balanceCheckRule,
+  priceDeviationRule,
+  maxPositionSizeRule,
+  maxDailyTradesRule,
+  maxDailyLossRule,
+  stopLossRequiredRule,
+  slippageCheckRule,
+  exposureLimitRule,
+} from './rules';
+
 export interface ConnectorEvents {
   'connector:order-placed': { orderId: string; exchange: string; symbol: string; side: string; amount: number };
   'connector:order-filled': { orderId: string; exchange: string; symbol: string; filledAmount: number; price: number };

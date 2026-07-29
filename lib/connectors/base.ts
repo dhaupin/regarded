@@ -15,6 +15,14 @@ import type {
   EncryptedSecrets,
 } from '../../types';
 import { EventEmitter } from '../event';
+import { 
+  RulesValidator, 
+  ValidationResult, 
+  OrderContext, 
+  createRulesValidator,
+  defaultPreRules,
+  defaultPostRules 
+} from '../rules';
 
 export interface ConnectorEvents {
   'connector:order-placed': { orderId: string; exchange: string; symbol: string; side: string; amount: number };
@@ -31,9 +39,103 @@ export abstract class BaseConnector extends EventEmitter<ConnectorEvents> implem
   abstract exchange: string;
   protected connected: boolean = false;
   protected paperMode: boolean = true;
+  protected validator: RulesValidator;
+  protected dailyTradeCount: number = 0;
+  protected dailyLoss: number = 0;
   
   constructor() {
     super();
+    // Default validator with global rules
+    this.validator = createRulesValidator({
+      globalPreRules: defaultPreRules,
+      globalPostRules: defaultPostRules,
+      connectorRules: [],
+    });
+  }
+  
+  /**
+   * Validate an order before placing
+   * Runs pre-trade validation pipeline: global pre-rules → connector rules
+   */
+  async validateOrder(order: Order): Promise<ValidationResult> {
+    // Get current price
+    const currentPrice = await this.getPrice(order.pair);
+    
+    // Get balance
+    const balances = await this.getBalance();
+    const baseAsset = order.pair.split('/')[0];
+    const quoteAsset = order.pair.split('/')[1];
+    
+    let availableBalance = 0;
+    for (const bal of balances) {
+      if (bal.asset === quoteAsset) {
+        availableBalance = bal.available;
+      }
+    }
+    
+    // Build context
+    const context: OrderContext = {
+      order,
+      exchange: this.exchange,
+      connectorName: this.name,
+      availableBalance,
+      currentPrice,
+      positionSize: 0, // Would need position tracking
+      dailyTradeCount: this.dailyTradeCount,
+      dailyLoss: this.dailyLoss,
+      portfolioValue: balances.reduce((sum, b) => sum + (b.available + b.locked), 0),
+    };
+    
+    return this.validator.validatePreTrade(context);
+  }
+  
+  /**
+   * Validate after trade execution
+   * Runs post-trade validation pipeline: connector rules → global post-rules
+   */
+  async validatePostTrade(order: Order, filledPrice: number): Promise<ValidationResult> {
+    const currentPrice = await this.getPrice(order.pair);
+    
+    // Calculate slippage
+    const expectedPrice = order.price ?? currentPrice;
+    const slippage = order.type === 'market' 
+      ? (filledPrice - expectedPrice) / expectedPrice 
+      : 0;
+    
+    const balances = await this.getBalance();
+    
+    const context: OrderContext = {
+      order,
+      exchange: this.exchange,
+      connectorName: this.name,
+      availableBalance: balances[0]?.available ?? 0,
+      currentPrice,
+      positionSize: 0,
+      dailyTradeCount: this.dailyTradeCount,
+      dailyLoss: this.dailyLoss,
+      portfolioValue: balances.reduce((sum, b) => sum + (b.available + b.locked), 0),
+      slippage,
+      filledPrice,
+    };
+    
+    // Update daily stats
+    this.dailyTradeCount++;
+    
+    return this.validator.validatePostTrade(context);
+  }
+  
+  /**
+   * Add a custom rule for this connector
+   */
+  addValidationRule(rule: import('../rules').ValidationRule): void {
+    this.validator.addConnectorRule(rule);
+  }
+  
+  /**
+   * Enable/disable a validation rule
+   */
+  setValidationRuleEnabled(ruleId: string, enabled: boolean): void {
+    this.validator.setRuleEnabled(ruleId, enabled);
   }
   
   abstract connect(credentials: EncryptedSecrets): Promise<boolean>;

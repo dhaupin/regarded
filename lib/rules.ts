@@ -151,3 +151,477 @@ export class RulesEngine {
 export function createRulesEngine(config?: Partial<RulesEngineConfig>): RulesEngine {
   return new RulesEngine(config);
 }
+
+// ===========================================
+// Order Validation Pipeline
+// ===========================================
+
+export type ValidationPhase = 'pre' | 'post';
+export type ValidationAction = 'allow' | 'block' | 'modify';
+
+export interface ValidationResult {
+  valid: boolean;
+  action: ValidationAction;
+  reason?: string;
+  modifiedOrder?: Order;
+  metadata?: Record<string, any>;
+}
+
+export interface OrderContext {
+  order: Order;
+  exchange: string;
+  connectorName: string;
+  availableBalance: number;
+  currentPrice: number;
+  positionSize: number; // Total position size for this symbol
+  dailyTradeCount: number;
+  dailyLoss: number;
+  portfolioValue: number;
+  slippage?: number; // For post-trade validation
+  filledPrice?: number; // For post-trade validation
+}
+
+export interface ValidationRule {
+  id: string;
+  name: string;
+  description: string;
+  phase: ValidationPhase;
+  enabled: boolean;
+  
+  /**
+   * Validate the order context
+   * @returns ValidationResult with action: allow, block, or modify
+   */
+  validate(context: OrderContext): ValidationResult | Promise<ValidationResult>;
+}
+
+// ===========================================
+// Built-in Validation Rules
+// ===========================================
+
+/**
+ * Max order size validation
+ */
+export const maxOrderSizeRule: ValidationRule = {
+  id: 'max_order_size',
+  name: 'Max Order Size',
+  description: 'Block orders exceeding max $ value',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const orderValue = context.order.amount * (context.order.price ?? context.currentPrice);
+    
+    if (orderValue > 10000) { // Configurable threshold
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Order value $${orderValue.toFixed(2)} exceeds max $10,000`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Min order size validation
+ */
+export const minOrderSizeRule: ValidationRule = {
+  id: 'min_order_size',
+  name: 'Min Order Size',
+  description: 'Block orders below min $ value to avoid dust',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const orderValue = context.order.amount * (context.order.price ?? context.currentPrice);
+    
+    if (orderValue < 10) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Order value $${orderValue.toFixed(2)} below min $10`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Balance check validation
+ */
+export const balanceCheckRule: ValidationRule = {
+  id: 'balance_check',
+  name: 'Balance Check',
+  description: 'Ensure sufficient balance for order',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const orderValue = context.order.amount * (context.order.price ?? context.currentPrice);
+    const required = orderValue * 1.01; // 1% buffer for fees
+    
+    if (context.availableBalance < required) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Insufficient balance: have $${context.availableBalance.toFixed(2)}, need $${required.toFixed(2)}`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Price deviation validation for limit orders
+ */
+export const priceDeviationRule: ValidationRule = {
+  id: 'price_deviation',
+  name: 'Price Deviation',
+  description: 'Limit orders must be within % of market price',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    if (context.order.type === 'market') {
+      return { valid: true, action: 'allow' };
+    }
+    
+    const limitPrice = context.order.price ?? 0;
+    const marketPrice = context.currentPrice;
+    
+    if (!limitPrice || !marketPrice) {
+      return { valid: true, action: 'allow' };
+    }
+    
+    const deviation = Math.abs((limitPrice - marketPrice) / marketPrice);
+    const maxDeviation = 0.05; // 5% max deviation
+    
+    if (deviation > maxDeviation) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Limit price ${(deviation * 100).toFixed(1)}% from market (max 5%)`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Max position size validation
+ */
+export const maxPositionSizeRule: ValidationRule = {
+  id: 'max_position_size',
+  name: 'Max Position Size',
+  description: 'Max $ exposed per symbol',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const orderValue = context.order.amount * context.currentPrice;
+    const totalPosition = context.positionSize + orderValue;
+    const maxPosition = 50000; // $50k max per symbol
+    
+    if (totalPosition > maxPosition) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Position $${totalPosition.toFixed(2)} would exceed max $${maxPosition}`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Daily trade count limit
+ */
+export const maxDailyTradesRule: ValidationRule = {
+  id: 'max_daily_trades',
+  name: 'Max Daily Trades',
+  description: 'Rate limit trades per day',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const maxTrades = 50; // Max 50 trades per day
+    
+    if (context.dailyTradeCount >= maxTrades) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Daily trade limit reached (${maxTrades})`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Daily loss limit - stop trading if losing too much
+ */
+export const maxDailyLossRule: ValidationRule = {
+  id: 'max_daily_loss',
+  name: 'Max Daily Loss',
+  description: 'Stop trading if daily loss threshold hit',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const maxLoss = 1000; // $1000 max daily loss
+    
+    if (context.dailyLoss < -maxLoss) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Daily loss $${Math.abs(context.dailyLoss).toFixed(2)} exceeds $${maxLoss}`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Stop-loss required for large orders
+ */
+export const stopLossRequiredRule: ValidationRule = {
+  id: 'stop_loss_required',
+  name: 'Stop Loss Required',
+  description: 'Large orders must have stop-loss',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const orderValue = context.order.amount * context.currentPrice;
+    const threshold = 5000; // $5k threshold
+    
+    if (orderValue > threshold && !context.order.stop_price) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Orders > $${threshold} require stop-loss`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Slippage validation - post-trade rule
+ */
+export const slippageCheckRule: ValidationRule = {
+  id: 'slippage_check',
+  name: 'Slippage Check',
+  description: 'Alert if fill price differs significantly from expected',
+  phase: 'post',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    if (!context.slippage || !context.filledPrice) {
+      return { valid: true, action: 'allow' };
+    }
+    
+    const maxSlippage = 0.02; // 2% max slippage
+    const slippagePct = Math.abs(context.slippage);
+    
+    if (slippagePct > maxSlippage) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Slippage ${(slippagePct * 100).toFixed(1)}% exceeds max ${(maxSlippage * 100)}%`,
+        metadata: { slippage: context.slippage, filledPrice: context.filledPrice },
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Exposure limit - post-trade
+ */
+export const exposureLimitRule: ValidationRule = {
+  id: 'exposure_limit',
+  name: 'Exposure Limit',
+  description: 'Max $ exposed per symbol across all positions',
+  phase: 'post',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const maxExposure = 100000; // $100k max exposure
+    
+    if (context.positionSize > maxExposure) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Exposure $${context.positionSize.toFixed(2)} exceeds $${maxExposure}`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+// Default pre-trade rules
+export const defaultPreRules: ValidationRule[] = [
+  maxOrderSizeRule,
+  minOrderSizeRule,
+  balanceCheckRule,
+  priceDeviationRule,
+  maxPositionSizeRule,
+  maxDailyTradesRule,
+  maxDailyLossRule,
+  stopLossRequiredRule,
+];
+
+// Default post-trade rules
+export const defaultPostRules: ValidationRule[] = [
+  slippageCheckRule,
+  exposureLimitRule,
+];
+
+// ===========================================
+// Rules Validator Pipeline
+// ===========================================
+
+export interface RulesValidatorConfig {
+  globalPreRules?: ValidationRule[];
+  globalPostRules?: ValidationRule[];
+  connectorRules?: ValidationRule[];
+}
+
+export class RulesValidator {
+  private config: RulesValidatorConfig;
+  
+  constructor(config: RulesValidatorConfig = {}) {
+    this.config = {
+      globalPreRules: config.globalPreRules ?? defaultPreRules,
+      globalPostRules: config.globalPostRules ?? defaultPostRules,
+      connectorRules: config.connectorRules ?? [],
+    };
+  }
+  
+  /**
+   * Run pre-trade validation pipeline
+   * Global Pre → Connector → Exchange (passthrough)
+   */
+  async validatePreTrade(context: OrderContext): Promise<ValidationResult> {
+    // 1. Run global pre-rules
+    for (const rule of this.config.globalPreRules ?? []) {
+      if (!rule.enabled) continue;
+      
+      const result = await rule.validate(context);
+      if (!result.valid || result.action === 'block') {
+        return result;
+      }
+    }
+    
+    // 2. Run connector-specific rules
+    for (const rule of this.config.connectorRules ?? []) {
+      if (!rule.enabled || rule.phase !== 'pre') continue;
+      
+      const result = await rule.validate(context);
+      if (!result.valid || result.action === 'block') {
+        return result;
+      }
+    }
+    
+    // 3. Allow through to exchange (passthrough)
+    return { valid: true, action: 'allow' };
+  }
+  
+  /**
+   * Run post-trade validation pipeline
+   * Exchange result → Connector → Global Post
+   */
+  async validatePostTrade(context: OrderContext): Promise<ValidationResult> {
+    // 1. Run connector-specific post-rules (if any)
+    for (const rule of this.config.connectorRules ?? []) {
+      if (!rule.enabled || rule.phase !== 'post') continue;
+      
+      const result = await rule.validate(context);
+      if (!result.valid || result.action === 'block') {
+        return result;
+      }
+    }
+    
+    // 2. Run global post-rules
+    for (const rule of this.config.globalPostRules ?? []) {
+      if (!rule.enabled) continue;
+      
+      const result = await rule.validate(context);
+      if (!result.valid || result.action === 'block') {
+        return result;
+      }
+    }
+    
+    return { valid: true, action: 'allow' };
+  }
+  
+  /**
+   * Full pipeline: pre-trade → (user places order) → post-trade
+   */
+  async validateFullPipeline(
+    preContext: OrderContext,
+    postContext: OrderContext
+  ): Promise<{ preResult: ValidationResult; postResult: ValidationResult }> {
+    const preResult = await this.validatePreTrade(preContext);
+    
+    if (!preResult.valid) {
+      return { preResult, postResult: { valid: false, action: 'block', reason: 'Pre-trade failed' } };
+    }
+    
+    const postResult = await this.validatePostTrade(postContext);
+    
+    return { preResult, postResult };
+  }
+  
+  /**
+   * Add a connector rule
+   */
+  addConnectorRule(rule: ValidationRule): void {
+    this.config.connectorRules?.push(rule);
+  }
+  
+  /**
+   * Enable/disable a rule by ID
+   */
+  setRuleEnabled(ruleId: string, enabled: boolean): void {
+    // Check global pre-rules
+    for (const rule of this.config.globalPreRules ?? []) {
+      if (rule.id === ruleId) {
+        rule.enabled = enabled;
+        return;
+      }
+    }
+    
+    // Check global post-rules
+    for (const rule of this.config.globalPostRules ?? []) {
+      if (rule.id === ruleId) {
+        rule.enabled = enabled;
+        return;
+      }
+    }
+    
+    // Check connector rules
+    for (const rule of this.config.connectorRules ?? []) {
+      if (rule.id === ruleId) {
+        rule.enabled = enabled;
+        return;
+      }
+    }
+  }
+}
+
+export function createRulesValidator(config?: RulesValidatorConfig): RulesValidator {
+  return new RulesValidator(config);
+}
