@@ -2,11 +2,27 @@
  * Rules Engine
  * 
  * Evaluate conditions, execute triggers, manage rule chaining.
+ * Emits events: rule:triggered, rule:violated, rule:created
  */
 
+import { EventEmitter } from './event';
 import type { Rule, Condition, Trigger, RulesEngineState, EngineResult, Candle, CandleInterval, Order } from './types';
 import { calculateIndicator } from './indicators';
 import { detectPattern } from './patterns';
+import { logAuditEvent } from './audit';
+import { 
+  PsychologyGuard, 
+  PsychologyGuardConfig,
+  FearGreedResult,
+  VolatilityRegime,
+  TradingSession 
+} from './psy';
+
+export interface RulesEvents {
+  'rule:triggered': { ruleName: string; context: any };
+  'rule:violated': { ruleName: string; reason: string };
+  'rule:created': { ruleName: string };
+}
 
 export interface RulesEngineConfig {
   maxChainDepth: number;
@@ -22,12 +38,13 @@ export interface ConditionContext {
 /**
  * Rules Engine
  */
-export class RulesEngine {
+export class RulesEngine extends EventEmitter<RulesEvents> {
   private config: RulesEngineConfig;
   private state: RulesEngineState;
   private triggeredRules = new Set<string>();
   
   constructor(config: Partial<RulesEngineConfig> = {}) {
+    super();
     this.config = { maxChainDepth: config.maxChainDepth ?? 5 };
     this.state = this.createInitialState();
   }
@@ -127,7 +144,11 @@ export class RulesEngine {
     const conditionsMet = await Promise.all(rule.conditions.map(c => this.evaluateCondition(c, ctx)));
     const met = rule.condition_logic === 'and' ? conditionsMet.every(r => r) : conditionsMet.some(r => r);
     
-    if (!met) return { triggered: false, actions_executed: 0, trades: [], errors: [] };
+    if (!met) {
+      // Emit violated event
+      this.emit('rule:violated', { ruleName: rule.id, reason: 'Conditions not met' });
+      return { triggered: false, actions_executed: 0, trades: [], errors: [] };
+    }
     
     // Execute triggers
     let actionsExecuted = 0;
@@ -140,6 +161,15 @@ export class RulesEngine {
     
     this.triggeredRules.add(rule.id);
     this.state.execution.rules_triggered++;
+    
+    // Emit triggered event
+    this.emit('rule:triggered', { ruleName: rule.id, context: ctx });
+    
+    // Audit log
+    logAuditEvent('rule_triggered' as any, rule.id, {
+      conditions: rule.conditions.length,
+      actions_executed: actionsExecuted,
+    }, 'medium').catch(() => {});
     
     return { triggered: true, actions_executed: actionsExecuted, trades: [], errors: [] };
   }
@@ -653,6 +683,78 @@ export const tradingCooldownRule: ValidationRule = {
   },
 };
 
+// Psychology configuration storage (singleton per config)
+const psychologyGuards = new Map<string, PsychologyGuard>();
+
+/**
+ * Get or create a PsychologyGuard for the given config
+ */
+function getPsychologyGuard(config?: PsychologyGuardConfig): PsychologyGuard {
+  const key = JSON.stringify(config || {});
+  if (!psychologyGuards.has(key)) {
+    psychologyGuards.set(key, new PsychologyGuard(config));
+  }
+  return psychologyGuards.get(key)!;
+}
+
+/**
+ * Psychology check - use MarketPsychology guards to validate trades
+ * 
+ * Supports:
+ * - Fear & Greed index blocking
+ * - Social sentiment analysis
+ * - Whale order detection
+ * - Volatility regime filtering
+ * - Trading session filtering
+ * - Order book imbalance checks
+ */
+export const psychologyRule: ValidationRule = {
+  id: 'psychology',
+  name: 'Psychology Guard',
+  description: 'Block trades based on market psychology indicators',
+  phase: 'pre',
+  enabled: true,
+  
+  async validate(context: OrderContext): Promise<ValidationResult> {
+    const config: PsychologyGuardConfig = (context as any).psychologyConfig || {};
+    const guard = getPsychologyGuard(config);
+    
+    try {
+      // Build options from context
+      const options: Parameters<typeof guard.evaluate>[0] = {
+        symbol: context.symbol,
+        candles: context.candles as any,
+        orderBook: (context as any).orderBook,
+        whaleOrders: (context as any).whaleOrders,
+      };
+      
+      const result = await guard.evaluate(options);
+      
+      if (!result.allowed) {
+        return {
+          valid: false,
+          action: 'block',
+          reason: `Psychology blocked: ${result.reasons.join('; ')}`,
+          details: result.checks,
+        };
+      }
+      
+      return { 
+        valid: true, 
+        action: 'allow',
+        details: result.checks,
+      };
+    } catch (error) {
+      // Allow on error - psychology is advisory
+      return { 
+        valid: true, 
+        action: 'allow',
+        details: { error: String(error) },
+      };
+    }
+  },
+};
+
 // Default pre-trade rules
 export const defaultPreRules: ValidationRule[] = [
   maxOrderSizeRule,
@@ -663,6 +765,8 @@ export const defaultPreRules: ValidationRule[] = [
   maxDailyTradesRule,
   maxDailyLossRule,
   stopLossRequiredRule,
+  // Psychology guard (optional - enable for market psychology checks)
+  psychologyRule,
   // Rug check rules (optional - enable as needed)
   minLiquidityRule,
   verifiedContractRule,

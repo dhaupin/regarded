@@ -9,6 +9,7 @@ import { KrakenConnector } from './connectors/kraken';
 import { SolanaConnector } from './connectors/solana';
 import { JupiterConnector } from './connectors/jupiter';
 import { EventEmitter } from './event';
+import { logAuditEvent } from './audit';
 
 // Re-export for convenience
 export { BaseConnector } from './connectors/base';
@@ -36,6 +37,7 @@ export {
   stopLossRequiredRule,
   slippageCheckRule,
   exposureLimitRule,
+  psychologyRule,
 } from './rules';
 
 export interface ConnectorEvents {

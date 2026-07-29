@@ -2,12 +2,21 @@
  * News API Integration
  * 
  * Dynamic news feed for trading decisions and blackout periods.
+ * Emits events: news:fetched, news:error, news:rate-limited
  */
 
+import { EventEmitter } from './event';
 import { fetch } from './network';
 import { LRUCache } from './cache';
 import { RateLimiter } from './qos';
 import { createError, ErrorCode } from './error';
+import { logAuditEvent } from './audit';
+
+export interface NewsEvents {
+  'news:fetched': { count: number; symbols: string[] };
+  'news:error': { error: string; symbols?: string[] };
+  'news:rate-limited': { retryAfter?: number };
+}
 
 export interface NewsItem {
   id: string;
@@ -48,13 +57,14 @@ const DEFAULT_CONFIG: NewsConfig = {
   defaultSymbols: ['BTC', 'ETH', 'SOL', 'SPY', 'QQQ', 'AAPL', 'TSLA'],
 };
 
-export class NewsService {
+export class NewsService extends EventEmitter<NewsEvents> {
   private config: NewsConfig;
   private cache: LRUCache<NewsItem[]>;
   private rateLimiter: RateLimiter;
   private recentNews: NewsItem[] = [];
 
   constructor(config: Partial<NewsConfig> = {}) {
+    super();
     this.config = { ...DEFAULT_CONFIG, ...config };
     // Use LRUCache with TTL for caching news
     this.cache = new LRUCache<NewsItem[]>(100, this.config.cacheDurationMs);
@@ -71,6 +81,8 @@ export class NewsService {
     const cached = this.cache.get(cacheKey);
     
     if (cached) {
+      // Emit fetched from cache event
+      this.emit('news:fetched', { count: cached.length, symbols: options.symbols || [] });
       return this.filterNews(cached, options);
     }
 
@@ -80,8 +92,29 @@ export class NewsService {
         const news = await this.fetchFromApi(options);
         this.cache.set(cacheKey, news);
         this.recentNews = news;
+        
+        // Emit fetched event
+        this.emit('news:fetched', { count: news.length, symbols: options.symbols || [] });
+        
+        // Audit log
+        logAuditEvent('news_fetched' as any, 'system', {
+          count: news.length,
+          symbols: options.symbols,
+        }, 'low').catch(() => {});
+        
         return this.filterNews(news, options);
       } catch (e) {
+        const error = e as Error;
+        
+        // Emit error event
+        this.emit('news:error', { error: error.message, symbols: options.symbols });
+        
+        // Audit log errors
+        logAuditEvent('news_error' as any, 'system', {
+          error: error.message,
+          symbols: options.symbols,
+        }, 'medium').catch(() => {});
+        
         console.warn('News API fetch failed, using fallback:', e);
       }
     }
@@ -173,6 +206,12 @@ export class NewsService {
     // Wait for rate limiter before making request
     const canProceed = this.rateLimiter.tryConsume(1);
     if (!canProceed) {
+      // Emit rate-limited event
+      this.emit('news:rate-limited', { retryAfter: 60 });
+      
+      // Audit log rate limit
+      logAuditEvent('news_rate_limited' as any, 'system', {}, 'medium').catch(() => {});
+      
       throw createError({
         code: ErrorCode.RATE_LIMITED,
         message: 'News API rate limit exceeded',

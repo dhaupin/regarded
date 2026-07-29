@@ -7,6 +7,7 @@
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
 import { BaseConnector } from './base';
 import { createError, ErrorCode } from '../error';
+import { logAuditEvent } from '../audit';
 
 export class SolanaConnector extends BaseConnector {
   name = 'Solana Wallet';
@@ -16,12 +17,23 @@ export class SolanaConnector extends BaseConnector {
   async connect(credentials: EncryptedSecrets): Promise<boolean> {
     // Would connect to Solana wallet
     this.connected = true;
+    
+    // Audit log
+    logAuditEvent('connector_connected' as any, this.exchange, {
+      exchange: this.exchange,
+    }, 'medium').catch(() => {});
+    
     return true;
   }
   
   async disconnect(): Promise<void> {
     this.publicKey = undefined;
     this.connected = false;
+    
+    // Audit log
+    logAuditEvent('connector_disconnected' as any, this.exchange, {
+      exchange: this.exchange,
+    }, 'medium').catch(() => {});
   }
   
   async getBalance(): Promise<Balance[]> {

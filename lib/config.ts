@@ -2,10 +2,19 @@
  * Config Module
  * 
  * Configuration registry and encrypted secrets storage.
+ * Emits events: config:updated, secret:added, secret:removed
  */
 
+import { EventEmitter } from './event';
 import type { GlobalConfig, UserConfig, StrategyConfig, SecretsCategory, SecretsMetadata, UserPreferences } from './types';
 import { encrypt, decrypt, generateToken } from './encrypt';
+import { logAuditEvent } from './audit';
+
+export interface ConfigEvents {
+  'config:updated': { userId?: string; keys: string[] };
+  'secret:added': { userId: string; category: string; label: string };
+  'secret:removed': { userId: string; secretId: string };
+}
 
 export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
   supported_exchanges: ['kraken', 'solana', 'jupiter'],
@@ -23,10 +32,11 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
 /**
  * Config Manager
  */
-export class ConfigManager {
+export class ConfigManager extends EventEmitter<ConfigEvents> {
   private kv: KVNamespace;
   
   constructor(kv: KVNamespace) {
+    super();
     this.kv = kv;
   }
   
@@ -45,6 +55,15 @@ export class ConfigManager {
     const current = await this.getGlobalConfig();
     const updated = { ...current, ...config };
     await this.kv.put('config:global', JSON.stringify(updated));
+    
+    // Emit event
+    this.emit('config:updated', { keys: Object.keys(config) });
+    
+    // Audit log
+    logAuditEvent('config_updated' as any, 'global', {
+      keys: Object.keys(config),
+    }, 'medium').catch(() => {});
+    
     return updated;
   }
   
@@ -67,6 +86,15 @@ export class ConfigManager {
       preferences: { ...current.preferences, ...preferences },
     };
     await this.kv.put(`config:user:${userId}`, JSON.stringify(updated));
+    
+    // Emit event
+    this.emit('config:updated', { userId, keys: Object.keys(preferences) });
+    
+    // Audit log
+    logAuditEvent('config_updated' as any, userId, {
+      keys: Object.keys(preferences),
+    }, 'low').catch(() => {});
+    
     return updated;
   }
   
@@ -79,6 +107,16 @@ export class ConfigManager {
     const storageKey = `secret:${userId}:${secretId}`;
     
     await this.kv.put(storageKey, JSON.stringify(encrypted));
+    
+    // Emit event
+    this.emit('secret:added', { userId, category, label });
+    
+    // Audit log
+    logAuditEvent('secret_added' as any, userId, {
+      category,
+      label,
+      secretId,
+    }, 'high').catch(() => {});
     
     return {
       id: secretId,
@@ -107,6 +145,12 @@ export class ConfigManager {
    */
   async deleteSecret(userId: string, secretId: string): Promise<void> {
     await this.kv.delete(`secret:${userId}:${secretId}`);
+    
+    // Emit event
+    this.emit('secret:removed', { userId, secretId });
+    
+    // Audit log
+    logAuditEvent('secret_removed' as any, userId, { secretId }, 'high').catch(() => {});
   }
 }
 

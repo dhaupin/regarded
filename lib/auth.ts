@@ -2,10 +2,20 @@
  * Auth Module
  * 
  * JWT tokens, session management, lockout after failed attempts.
+ * Emits events: auth:login, auth:logout, auth:failed, auth:locked
  */
 
+import { EventEmitter } from './event';
 import type { User, Session, UserRole, UserSettings } from './types';
 import { generateToken, hashSHA256, secureCompare } from './encrypt';
+import { logAuditEvent } from './audit';
+
+export interface AuthEvents {
+  'auth:login': { userId: string; method: string };
+  'auth:logout': { userId: string };
+  'auth:failed': { identifier: string; reason: string };
+  'auth:locked': { identifier: string; lockoutUntil: number };
+}
 
 export interface AuthConfig {
   jwtSecret: string;
@@ -26,11 +36,12 @@ export interface JWTPayload {
 /**
  * Auth Manager with lockout support
  */
-export class AuthManager {
+export class AuthManager extends EventEmitter<AuthEvents> {
   private config: AuthConfig;
   private failedAttempts: Map<string, { count: number; lockoutUntil: number }> = new Map();
   
   constructor(config: AuthConfig) {
+    super();
     this.config = config;
   }
   
@@ -57,8 +68,27 @@ export class AuthManager {
     if (attempt.count >= this.config.maxAttempts) {
       attempt.lockoutUntil = Date.now() + this.config.lockoutDurationMs;
       this.failedAttempts.set(identifier, attempt);
+      
+      // Emit locked event
+      this.emit('auth:locked', { identifier, lockoutUntil: attempt.lockoutUntil });
+      
+      // Audit log
+      logAuditEvent('auth_locked' as any, identifier, {
+        attempts: attempt.count,
+        lockoutUntil: attempt.lockoutUntil,
+      }, 'high').catch(() => {});
+      
       return true; // Now locked out
     }
+    
+    // Emit failed event
+    this.emit('auth:failed', { identifier, reason: `Failed attempt ${attempt.count}/${this.config.maxAttempts}` });
+    
+    // Audit log
+    logAuditEvent('auth_failed' as any, identifier, {
+      attempts: attempt.count,
+      maxAttempts: this.config.maxAttempts,
+    }, 'medium').catch(() => {});
     
     this.failedAttempts.set(identifier, attempt);
     return false;
@@ -72,9 +102,9 @@ export class AuthManager {
   }
   
   /**
-   * Generate JWT
+   * Generate JWT (login)
    */
-  async generateJWT(user: User): Promise<string> {
+  async generateJWT(user: User, method: string = 'password'): Promise<string> {
     const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
     const payload = btoa(JSON.stringify({
       userId: user.id,
@@ -84,7 +114,15 @@ export class AuthManager {
       exp: Date.now() + this.config.jwtExpiryMs,
     }));
     const signature = await hashSHA256(`${header}.${payload}.${this.config.jwtSecret}`);
-    return `${header}.${payload}.${signature}`;
+    const token = `${header}.${payload}.${signature}`;
+    
+    // Emit login event
+    this.emit('auth:login', { userId: user.id, method });
+    
+    // Audit log
+    logAuditEvent('user_login' as any, user.id, { method }, 'low').catch(() => {});
+    
+    return token;
   }
   
   /**
@@ -125,5 +163,19 @@ export class AuthManager {
       created_at: Date.now(),
       last_active: Date.now(),
     };
+  }
+  
+  /**
+   * Logout - emit logout event and audit
+   */
+  async logout(userId: string): Promise<void> {
+    // Clear failed attempts on successful logout
+    this.failedAttempts.delete(userId);
+    
+    // Emit logout event
+    this.emit('auth:logout', { userId });
+    
+    // Audit log
+    logAuditEvent('user_logout' as any, userId, {}, 'low').catch(() => {});
   }
 }

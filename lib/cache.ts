@@ -3,7 +3,10 @@
  * 
  * LRU (Least Recently Used) cache with TTL support.
  * Inspired by Vant's cache module.
+ * Emits events: cache:hit, cache:miss, cache:evicted
  */
+
+import { EventEmitter } from './event';
 
 interface CacheEntry<T> {
   value: T;
@@ -11,10 +14,17 @@ interface CacheEntry<T> {
   expiresAt?: number;
 }
 
+export interface CacheEvents {
+  'cache:hit': { key: string };
+  'cache:miss': { key: string };
+  'cache:evicted': { key: string; reason: 'ttl' | 'capacity' };
+  'cache:set': { key: string };
+}
+
 /**
  * LRU Cache with TTL
  */
-export class LRUCache<T> {
+export class LRUCache<T> extends EventEmitter<CacheEvents> {
   private cache = new Map<string, CacheEntry<T>>();
   private maxSize: number;
   private defaultTTL: number;
@@ -24,6 +34,7 @@ export class LRUCache<T> {
    * @param defaultTTL - Default TTL in milliseconds (0 = no expiry)
    */
   constructor(maxSize: number = 1000, defaultTTL: number = 3600000) {
+    super();
     this.maxSize = maxSize;
     this.defaultTTL = defaultTTL;
   }
@@ -33,17 +44,26 @@ export class LRUCache<T> {
    */
   get(key: string): T | undefined {
     const entry = this.cache.get(key);
-    if (!entry) return undefined;
+    if (!entry) {
+      // Emit miss event
+      this.emit('cache:miss', { key });
+      return undefined;
+    }
     
     // Check expiration
     if (entry.expiresAt && Date.now() > entry.expiresAt) {
       this.cache.delete(key);
+      // Emit evicted event
+      this.emit('cache:evicted', { key, reason: 'ttl' });
       return undefined;
     }
     
     // Move to end (most recently used) - delete and re-insert
     this.cache.delete(key);
     this.cache.set(key, entry);
+    
+    // Emit hit event
+    this.emit('cache:hit', { key });
     
     return entry.value;
   }
@@ -60,13 +80,20 @@ export class LRUCache<T> {
     // Remove oldest if at capacity
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
-      if (firstKey) this.cache.delete(firstKey);
+      if (firstKey) {
+        this.cache.delete(firstKey);
+        // Emit evicted event
+        this.emit('cache:evicted', { key: firstKey, reason: 'capacity' });
+      }
     }
     
     const ttlMs = ttl ?? this.defaultTTL;
     const expiresAt = ttlMs > 0 ? Date.now() + ttlMs : undefined;
     
     this.cache.set(key, { value, timestamp: Date.now(), expiresAt });
+    
+    // Emit set event
+    this.emit('cache:set', { key });
   }
   
   /**

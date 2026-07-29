@@ -8,6 +8,7 @@
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
 import { BaseConnector } from './base';
 import { createError, ErrorCode } from '../error';
+import { logAuditEvent } from '../audit';
 
 export class KrakenConnector extends BaseConnector {
   name = 'Kraken';
@@ -22,6 +23,12 @@ export class KrakenConnector extends BaseConnector {
     // const { apiKey, apiSecret } = JSON.parse(decrypted);
     
     this.connected = true;
+    
+    // Audit log
+    logAuditEvent('connector_connected' as any, this.exchange, {
+      exchange: this.exchange,
+    }, 'medium').catch(() => {});
+    
     return true;
   }
   
@@ -29,6 +36,11 @@ export class KrakenConnector extends BaseConnector {
     this.apiKey = undefined;
     this.apiSecret = undefined;
     this.connected = false;
+    
+    // Audit log
+    logAuditEvent('connector_disconnected' as any, this.exchange, {
+      exchange: this.exchange,
+    }, 'medium').catch(() => {});
   }
   
   async getBalance(): Promise<Balance[]> {
