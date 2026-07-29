@@ -6,6 +6,7 @@
 
 import { fetch } from './network';
 import { LRUCache } from './cache';
+import { RateLimiter } from './qos';
 
 export interface NewsItem {
   id: string;
@@ -28,6 +29,8 @@ export interface NewsConfig {
   cacheDurationMs: number;
   /** Default symbols to track */
   defaultSymbols: string[];
+  /** Max API requests per minute (default: 60) */
+  maxRequestsPerMinute?: number;
 }
 
 export interface NewsSearchOptions {
@@ -47,12 +50,16 @@ const DEFAULT_CONFIG: NewsConfig = {
 export class NewsService {
   private config: NewsConfig;
   private cache: LRUCache<NewsItem[]>;
+  private rateLimiter: RateLimiter;
   private recentNews: NewsItem[] = [];
 
   constructor(config: Partial<NewsConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     // Use LRUCache with TTL for caching news
     this.cache = new LRUCache<NewsItem[]>(100, this.config.cacheDurationMs);
+    // Rate limiter: tokens refill at (maxTokens / ms) per minute
+    const maxRequests = this.config.maxRequestsPerMinute || 60;
+    this.rateLimiter = new RateLimiter(maxRequests, maxRequests / 60000);
   }
 
   /**
@@ -162,6 +169,12 @@ export class NewsService {
   }
 
   private async fetchFromApi(options: NewsSearchOptions): Promise<NewsItem[]> {
+    // Wait for rate limiter before making request
+    const canProceed = this.rateLimiter.tryConsume(1);
+    if (!canProceed) {
+      throw new Error('News API rate limit exceeded');
+    }
+
     const params = new URLSearchParams();
     if (options.symbols) params.set('symbols', options.symbols.join(','));
     if (options.since) params.set('since', String(options.since));
