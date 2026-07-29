@@ -4,8 +4,8 @@
  * Provides security audit logging for all security-relevant events.
  */
 
-import type { AuditEvent, AuditEventType, RiskLevel } from '../core/types';
-import { generateToken } from './encryption';
+import type { AuditEvent, AuditEventType, RiskLevel } from './types';
+import { generateToken } from './encrypt';
 
 export { AuditEvent, AuditEventType, RiskLevel };
 

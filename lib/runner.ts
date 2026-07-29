@@ -24,6 +24,8 @@ import { calculateIndicator, IndicatorType } from './indicators';
 import { detectPattern, PatternType } from './patterns';
 import { createRulesValidator, ValidationResult, OrderContext } from './rules';
 import { Scheduler, createScheduler, Job } from './scheduler';
+import { QoSManager, createQoSManager, CircuitState } from './qos';
+import { logAuditEvent, AuditEventType, RiskLevel } from './audit';
 
 // ============================================================================
 // Types
@@ -44,6 +46,8 @@ export interface AgentConfig {
   paperMode?: boolean;
   /** Custom rules validator (optional) */
   validator?: ReturnType<typeof createRulesValidator>;
+  /** AgentGuard configuration (optional) */
+  guard?: GuardConfig;
 }
 
 export interface Signal {
@@ -90,6 +94,297 @@ export interface PortfolioSummary {
   dailyTrades: number;
 }
 
+// ============================================================================
+// AgentGuard - Trading Protections
+// ============================================================================
+
+export interface GuardConfig {
+  /** Maximum number of open positions (default: 5) */
+  maxPositions?: number;
+  /** Maximum daily loss in quote currency (default: 1000) */
+  maxDailyLoss?: number;
+  /** Maximum daily trades (default: 20) */
+  maxDailyTrades?: number;
+  /** Stop loss percentage (default: 2%) */
+  stopLossPercent?: number;
+  /** Take profit percentage (default: 5%) */
+  takeProfitPercent?: number;
+  /** Risk per trade as % of portfolio (default: 2%) */
+  riskPerTrade?: number;
+  /** Warmup ticks before trading (default: 5) */
+  warmupTicks?: number;
+  /** Maximum slippage % (default: 1%) */
+  maxSlippage?: number;
+  /** Trading hours - start hour (0-23, default: 0 = all day) */
+  tradingStartHour?: number;
+  /** Trading hours - end hour (0-23, default: 24 = all day) */
+  tradingEndHour?: number;
+  /** Enable circuit breaker on exchange failures (default: true) */
+  enableCircuitBreaker?: boolean;
+  /** Circuit breaker failure threshold (default: 5) */
+  circuitFailureThreshold?: number;
+}
+
+export interface GuardResult {
+  allowed: boolean;
+  reason: string;
+  reasonCode: GuardReasonCode;
+}
+
+export enum GuardReasonCode {
+  OK = 'ok',
+  MAX_POSITIONS = 'max_positions',
+  MAX_DAILY_LOSS = 'max_daily_loss',
+  MAX_DAILY_TRADES = 'max_daily_trades',
+  STOP_LOSS = 'stop_loss',
+  TAKE_PROFIT = 'take_profit',
+  WARMUP = 'warmup',
+  SLIPPAGE = 'slippage',
+  TRADING_HOURS = 'trading_hours',
+  CIRCUIT_BREAKER = 'circuit_breaker',
+}
+
+export class AgentGuard {
+  private config: Required<GuardConfig>;
+  private tickCount: number = 0;
+  private dailyLoss: number = 0;
+  private dailyTrades: number = 0;
+  private lastResetDate: string = '';
+  private circuitOpen: boolean = false;
+  
+  constructor(config: GuardConfig = {}) {
+    this.config = {
+      maxPositions: config.maxPositions ?? 5,
+      maxDailyLoss: config.maxDailyLoss ?? 1000,
+      maxDailyTrades: config.maxDailyTrades ?? 20,
+      stopLossPercent: config.stopLossPercent ?? 2,
+      takeProfitPercent: config.takeProfitPercent ?? 5,
+      riskPerTrade: config.riskPerTrade ?? 2,
+      warmupTicks: config.warmupTicks ?? 5,
+      maxSlippage: config.maxSlippage ?? 1,
+      tradingStartHour: config.tradingStartHour ?? 0,
+      tradingEndHour: config.tradingEndHour ?? 24,
+      enableCircuitBreaker: config.enableCircuitBreaker ?? true,
+      circuitFailureThreshold: config.circuitFailureThreshold ?? 5,
+    };
+  }
+  
+  /**
+   * Check if a new position should be allowed
+   */
+  checkNewPosition(
+    currentPositions: number,
+    portfolioValue: number,
+    dailyPnl: number
+  ): GuardResult {
+    // Reset daily counters if new day
+    this.resetDailyIfNeeded();
+    
+    // Check warmup
+    if (this.tickCount < this.config.warmupTicks) {
+      return {
+        allowed: false,
+        reason: `Warmup: waiting ${this.config.warmupTicks - this.tickCount} more ticks`,
+        reasonCode: GuardReasonCode.WARMUP,
+      };
+    }
+    
+    // Check max positions
+    if (currentPositions >= this.config.maxPositions) {
+      return {
+        allowed: false,
+        reason: `Max positions (${this.config.maxPositions}) reached`,
+        reasonCode: GuardReasonCode.MAX_POSITIONS,
+      };
+    }
+    
+    // Check max daily trades
+    if (this.dailyTrades >= this.config.maxDailyTrades) {
+      return {
+        allowed: false,
+        reason: `Max daily trades (${this.config.maxDailyTrades}) reached`,
+        reasonCode: GuardReasonCode.MAX_DAILY_TRADES,
+      };
+    }
+    
+    // Check max daily loss
+    if (dailyPnl <= -this.config.maxDailyLoss) {
+      return {
+        allowed: false,
+        reason: `Max daily loss ($${this.config.maxDailyLoss}) reached`,
+        reasonCode: GuardReasonCode.MAX_DAILY_LOSS,
+      };
+    }
+    
+    // Check trading hours
+    if (!this.isWithinTradingHours()) {
+      return {
+        allowed: false,
+        reason: `Outside trading hours (${this.config.tradingStartHour}:00-${this.config.tradingEndHour}:00)`,
+        reasonCode: GuardReasonCode.TRADING_HOURS,
+      };
+    }
+    
+    // Check circuit breaker
+    if (this.circuitOpen) {
+      return {
+        allowed: false,
+        reason: 'Circuit breaker is open - exchange experiencing issues',
+        reasonCode: GuardReasonCode.CIRCUIT_BREAKER,
+      };
+    }
+    
+    return {
+      allowed: true,
+      reason: 'All checks passed',
+      reasonCode: GuardReasonCode.OK,
+    };
+  }
+  
+  /**
+   * Check if position should be closed due to stop loss
+   */
+  checkStopLoss(position: Position): GuardResult {
+    const pnlPercent = position.pnlPercent;
+    
+    if (pnlPercent <= -this.config.stopLossPercent) {
+      return {
+        allowed: false,
+        reason: `Stop loss triggered: ${pnlPercent.toFixed(2)}% <= -${this.config.stopLossPercent}%`,
+        reasonCode: GuardReasonCode.STOP_LOSS,
+      };
+    }
+    
+    return { allowed: true, reason: 'No stop loss', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check if position should be closed due to take profit
+   */
+  checkTakeProfit(position: Position): GuardResult {
+    const pnlPercent = position.pnlPercent;
+    
+    if (pnlPercent >= this.config.takeProfitPercent) {
+      return {
+        allowed: false,
+        reason: `Take profit triggered: ${pnlPercent.toFixed(2)}% >= ${this.config.takeProfitPercent}%`,
+        reasonCode: GuardReasonCode.TAKE_PROFIT,
+      };
+    }
+    
+    return { allowed: true, reason: 'No take profit', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Check slippage before order execution
+   */
+  checkSlippage(orderPrice: number, currentPrice: number): GuardResult {
+    const slippage = Math.abs((orderPrice - currentPrice) / currentPrice) * 100;
+    
+    if (slippage > this.config.maxSlippage) {
+      return {
+        allowed: false,
+        reason: `Slippage too high: ${slippage.toFixed(2)}% > ${this.config.maxSlippage}%`,
+        reasonCode: GuardReasonCode.SLIPPAGE,
+      };
+    }
+    
+    return { allowed: true, reason: 'Slippage acceptable', reasonCode: GuardReasonCode.OK };
+  }
+  
+  /**
+   * Calculate position size based on risk %
+   */
+  calculatePositionSize(portfolioValue: number, entryPrice: number): number {
+    const riskAmount = portfolioValue * (this.config.riskPerTrade / 100);
+    // Size = risk / (entry * stopLoss%)
+    const size = riskAmount / (entryPrice * (this.config.stopLossPercent / 100));
+    return size;
+  }
+  
+  /**
+   * Record a trade (for daily limits)
+   */
+  recordTrade(): void {
+    this.dailyTrades++;
+  }
+  
+  /**
+   * Record a loss (for daily loss limit)
+   */
+  recordLoss(amount: number): void {
+    this.dailyLoss += Math.abs(amount);
+  }
+  
+  /**
+   * Record a profit (for daily loss calculation)
+   */
+  recordProfit(amount: number): void {
+    this.dailyLoss -= amount;
+  }
+  
+  /**
+   * Increment tick count
+   */
+  tick(): void {
+    this.tickCount++;
+  }
+  
+  /**
+   * Get current tick count
+   */
+  getTickCount(): number {
+    return this.tickCount;
+  }
+  
+  /**
+   * Get config
+   */
+  getConfig(): Required<GuardConfig> {
+    return { ...this.config };
+  }
+  
+  /**
+   * Open circuit breaker
+   */
+  openCircuit(): void {
+    this.circuitOpen = true;
+  }
+  
+  /**
+   * Close circuit breaker
+   */
+  closeCircuit(): void {
+    this.circuitOpen = false;
+  }
+  
+  /**
+   * Check if circuit is open
+   */
+  isCircuitOpen(): boolean {
+    return this.circuitOpen;
+  }
+  
+  private resetDailyIfNeeded(): void {
+    const today = new Date().toISOString().split('T')[0];
+    if (today !== this.lastResetDate) {
+      this.dailyLoss = 0;
+      this.dailyTrades = 0;
+      this.lastResetDate = today;
+    }
+  }
+  
+  private isWithinTradingHours(): boolean {
+    const hour = new Date().getHours();
+    return hour >= this.config.tradingStartHour && hour < this.config.tradingEndHour;
+  }
+}
+
+// Factory
+export function createAgentGuard(config?: GuardConfig): AgentGuard {
+  return new AgentGuard(config);
+}
+
 // Strategy interface
 export interface Strategy {
   /** Unique strategy identifier */
@@ -132,6 +427,7 @@ export interface RunnerEvents {
   'tick:complete': { timestamp: number; tick: number; duration: number };
   'signal:generated': { signal: Signal; strategy: string };
   'signal:validated': { signal: Signal; result: ValidationResult };
+  'signal:blocked': { signal: Signal; guardResult: GuardResult };
   'order:placed': { execution: TradeExecution };
   'order:filled': { execution: TradeExecution };
   'order:cancelled': { execution: TradeExecution };
@@ -139,7 +435,10 @@ export interface RunnerEvents {
   'position:opened': { position: Position };
   'position:closed': { position: Position; pnl: number };
   'position:updated': { position: Position };
+  'position:stopped': { position: Position; reason: string };
+  'position:taken': { position: Position; reason: string };
   'portfolio:update': { summary: PortfolioSummary };
+  'guard:blocked': { guardResult: GuardResult };
 }
 
 // ============================================================================
@@ -154,6 +453,8 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   private positions: Map<string, Position> = new Map();
   private dailyTrades: number = 0;
   private dailyPnl: number = 0;
+  private guard: AgentGuard;
+  private qos: QoSManager;
   
   constructor(config: AgentConfig) {
     super();
@@ -165,6 +466,25 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     
     // Create scheduler
     this.scheduler = createScheduler({ enableHeartbeat: false });
+    
+    // Create guard with config or defaults
+    this.guard = createAgentGuard(config.guard);
+    
+    // Create QoS manager for circuit breaker
+    this.qos = createQoSManager();
+    
+    // Set up circuit breaker event handlers
+    this.qos.on('qos:circuit-open', ({ breaker }) => {
+      this.guard.openCircuit();
+      this.emit('agent:error', { 
+        error: `Circuit breaker opened for ${breaker}`, 
+        timestamp: Date.now() 
+      });
+    });
+    
+    this.qos.on('qos:circuit-closed', ({ breaker }) => {
+      this.guard.closeCircuit();
+    });
     
     // Set paper mode on all connectors
     for (const connector of this.config.connectors) {
@@ -203,8 +523,9 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   
   /**
    * Stop the trading agent
+   * @param closePositions If true, close all open positions before stopping (default: true)
    */
-  async stop(): Promise<void> {
+  async stop(closePositions: boolean = true): Promise<void> {
     if (!this.running) {
       return;
     }
@@ -213,6 +534,23 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     
     // Stop scheduler
     await this.scheduler.stop();
+    
+    // Graceful shutdown: close all positions
+    if (closePositions && this.positions.size > 0) {
+      const connector = this.config.connectors[0];
+      
+      for (const [symbol, position] of this.positions) {
+        try {
+          const currentPrice = await connector.getPrice(symbol);
+          await this.closePosition(symbol, currentPrice, 'Graceful shutdown');
+        } catch (e) {
+          this.emit('agent:error', { 
+            error: `Failed to close position ${symbol}: ${e}`, 
+            timestamp: Date.now() 
+          });
+        }
+      }
+    }
     
     // Disconnect all connectors
     for (const connector of this.config.connectors) {
@@ -245,6 +583,20 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
    */
   getPosition(symbol: string): Position | undefined {
     return this.positions.get(symbol);
+  }
+  
+  /**
+   * Get the agent guard
+   */
+  getGuard(): AgentGuard {
+    return this.guard;
+  }
+  
+  /**
+   * Get the QoS manager
+   */
+  getQoS(): QoSManager {
+    return this.qos;
   }
   
   /**
@@ -297,6 +649,32 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   // Private Methods
   // ===========================================================================
   
+  /**
+   * Log audit event
+   */
+  private async logAudit(
+    eventType: AuditEventType,
+    details: Record<string, any>,
+    riskLevel: RiskLevel = 'low'
+  ): Promise<void> {
+    try {
+      await logAuditEvent(
+        eventType,
+        'trading-agent',
+        { 
+          ...details,
+          tick: this.tickCount,
+          positions: this.positions.size,
+          dailyTrades: this.dailyTrades,
+        },
+        riskLevel
+      );
+    } catch (e) {
+      // Don't fail the trade if audit logging fails
+      console.error('Audit logging failed:', e);
+    }
+  }
+  
   private scheduleTick(): void {
     if (!this.running) return;
     
@@ -328,6 +706,12 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   }
   
   private async runTick(): Promise<void> {
+    // Increment guard tick counter
+    this.guard.tick();
+    
+    // Check stop loss / take profit on existing positions
+    await this.checkPositionGuards();
+    
     // For each symbol and strategy
     for (const symbol of this.config.symbols) {
       for (const strategy of this.config.strategies) {
@@ -342,6 +726,30 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     this.emit('portfolio:update', { summary });
   }
   
+  /**
+   * Check stop loss and take profit on all positions
+   */
+  private async checkPositionGuards(): Promise<void> {
+    for (const [symbol, position] of this.positions) {
+      // Check stop loss
+      const stopLossResult = this.guard.checkStopLoss(position);
+      if (!stopLossResult.allowed) {
+        const connector = this.config.connectors[0];
+        const currentPrice = await connector.getPrice(symbol);
+        await this.closePosition(symbol, currentPrice, stopLossResult.reason);
+        continue;
+      }
+      
+      // Check take profit
+      const takeProfitResult = this.guard.checkTakeProfit(position);
+      if (!takeProfitResult.allowed) {
+        const connector = this.config.connectors[0];
+        const currentPrice = await connector.getPrice(symbol);
+        await this.closePosition(symbol, currentPrice, takeProfitResult.reason);
+      }
+    }
+  }
+  
   private async runStrategy(
     strategy: Strategy,
     symbol: string,
@@ -351,8 +759,12 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       // Get connector (use first one for now)
       const connector = this.config.connectors[0];
       
-      // Fetch candles
-      const candles = await connector.getCandles(symbol, interval, 100);
+      // Fetch candles with circuit breaker protection
+      const candles = await this.qos.executeWithBreaker(
+        `connector:${connector.name}`,
+        () => connector.getCandles(symbol, interval, 100)
+      );
+      
       if (candles.length < 20) return;
       
       // Calculate indicators
@@ -454,6 +866,20 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   private async executeSignal(signal: Signal): Promise<void> {
     const connector = this.config.connectors[0];
     
+    // Check guard before executing
+    const portfolio = await this.getPortfolio();
+    const guardResult = this.guard.checkNewPosition(
+      this.positions.size,
+      portfolio.totalValue,
+      portfolio.dailyPnl
+    );
+    
+    if (!guardResult.allowed) {
+      this.emit('signal:blocked', { signal, guardResult });
+      this.emit('guard:blocked', { guardResult });
+      return;
+    }
+    
     // Check for existing position
     const existingPosition = this.positions.get(signal.symbol);
     
@@ -492,7 +918,11 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     };
     
     try {
-      const result = await connector.placeOrder(order);
+      // Execute order with circuit breaker protection
+      const result = await this.qos.executeWithBreaker(
+        `connector:${connector.name}`,
+        () => connector.placeOrder(order)
+      );
       execution.result = result;
       
       // Create position
@@ -511,16 +941,33 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       this.positions.set(signal.symbol, position);
       this.dailyTrades++;
       
+      // Record trade in guard
+      this.guard.recordTrade();
+      
       this.emit('order:placed', { execution });
       this.emit('position:opened', { position });
+      
+      // Audit log
+      await this.logAudit('trade_executed', {
+        symbol: position.symbol,
+        side: position.side,
+        amount: position.amount,
+        entryPrice: position.entryPrice,
+      }, 'medium');
       
     } catch (error) {
       execution.error = String(error);
       this.emit('order:failed', { execution });
+      
+      // Audit log failure
+      await this.logAudit('trade_executed', {
+        symbol: signal.symbol,
+        error: String(error),
+      }, 'high');
     }
   }
   
-  private async closePosition(symbol: string, currentPrice: number): Promise<void> {
+  private async closePosition(symbol: string, currentPrice: number, reason: string = 'Signal reversal'): Promise<void> {
     const position = this.positions.get(symbol);
     if (!position) return;
     
@@ -562,12 +1009,28 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       
       this.dailyPnl += pnl;
       
+      // Record profit/loss in guard
+      if (pnl < 0) {
+        this.guard.recordLoss(pnl);
+      } else {
+        this.guard.recordProfit(pnl);
+      }
+      
       // Close position
       position.closedAt = Date.now();
       this.positions.delete(symbol);
       
       this.emit('order:filled', { execution });
       this.emit('position:closed', { position, pnl });
+      
+      // Audit log
+      await this.logAudit('trade_executed', {
+        symbol: position.symbol,
+        side: position.side,
+        exitPrice: currentPrice,
+        pnl: pnl,
+        reason: reason,
+      }, pnl < 0 ? 'medium' : 'low');
       
     } catch (error) {
       execution.error = String(error);
