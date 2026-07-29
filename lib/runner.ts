@@ -171,10 +171,16 @@ export interface GuardConfig {
   newsBlackoutPeriods?: NewsBlackoutPeriod[];
 }
 
+/** Single trading window */
+export interface TradingWindow {
+  startHour: number;
+  endHour: number;
+}
+
 /** Custom trading schedule by day of week */
 export interface TradingSchedule {
-  /** Map of day (0-6) to trading windows. Null = no trading that day */
-  [day: number]: { startHour: number; endHour: number } | null;
+  /** Map of day (0-6) to trading windows. Null = no trading that day. Array for multiple windows. */
+  [day: number]: TradingWindow | TradingWindow[] | null;
 }
 
 /** News blackout period */
@@ -812,10 +818,17 @@ export class AgentGuard {
       };
     }
     
-    if (hour < daySchedule.startHour || hour >= daySchedule.endHour) {
+    // Handle multiple windows (array) or single window
+    const windows = Array.isArray(daySchedule) ? daySchedule : [daySchedule];
+    
+    // Check if current hour falls within any window
+    const withinWindow = windows.some(w => hour >= w.startHour && hour < w.endHour);
+    
+    if (!withinWindow) {
+      const windowStr = windows.map(w => `${w.startHour}:00-${w.endHour}:00`).join(', ');
       return {
         allowed: false,
-        reason: `Outside trading hours (${daySchedule.startHour}:00-${daySchedule.endHour}:00)`,
+        reason: `Outside trading hours. Available: ${windowStr}`,
         reasonCode: GuardReasonCode.TRADING_HOURS,
       };
     }
