@@ -471,6 +471,188 @@ export const exposureLimitRule: ValidationRule = {
   },
 };
 
+// ============================================================================
+// Rug Check Rules - Token Safety Validation
+// ============================================================================
+
+/**
+ * Honeypot check - Simulate a trade to see if it would succeed
+ * Note: Requires connector to support simulateTrade()
+ */
+export const honeypotCheckRule: ValidationRule = {
+  id: 'honeypot_check',
+  name: 'Honeypot Check',
+  description: 'Check if token can be sold (simulate trade)',
+  phase: 'pre',
+  enabled: false, // Disabled by default - requires connector support
+  
+  async validate(context: OrderContext): Promise<ValidationResult> {
+    // This would require a connector method to simulate trading
+    // For now, return allow - real implementation would call:
+    // const canSell = await connector.simulateTrade(context.order);
+    // if (!canSell) return { valid: false, action: 'block', reason: 'Honeypot detected' };
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Minimum liquidity check
+ */
+export const minLiquidityRule: ValidationRule = {
+  id: 'min_liquidity',
+  name: 'Minimum Liquidity',
+  description: 'Reject tokens with insufficient liquidity',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const minLiquidityUSD = 10000; // $10k minimum
+    
+    // This would typically come from cached token data
+    // For now, check if we have liquidity data in context
+    const liquidity = (context as any).liquidityUSD ?? 0;
+    
+    if (liquidity < minLiquidityUSD) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Liquidity $${liquidity.toFixed(2)} below minimum $${minLiquidityUSD}`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Verified contract check
+ */
+export const verifiedContractRule: ValidationRule = {
+  id: 'verified_contract',
+  name: 'Verified Contract',
+  description: 'Only trade contracts verified on block explorer',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const isVerified = (context as any).contractVerified ?? true;
+    
+    if (!isVerified) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: 'Contract not verified on block explorer',
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Ownership renounced check
+ */
+export const ownershipRenouncedRule: ValidationRule = {
+  id: 'ownership_renounced',
+  name: 'Ownership Renounced',
+  description: 'Prefer tokens with renounced ownership',
+  phase: 'pre',
+  enabled: false, // Disabled by default - too restrictive for some strategies
+  
+  validate(context: OrderContext): ValidationResult {
+    const ownershipRenounced = (context as any).ownershipRenounced ?? false;
+    
+    if (!ownershipRenounced) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: 'Ownership not renounced - high rug pull risk',
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Mint authority check - can new tokens be minted?
+ */
+export const mintAuthorityRule: ValidationRule = {
+  id: 'mint_authority',
+  name: 'No Mint Authority',
+  description: 'Block tokens where mint authority exists',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const hasMintAuthority = (context as any).hasMintAuthority ?? false;
+    
+    if (hasMintAuthority) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: 'Mint authority exists - infinite token risk',
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Anti-whale - limit holder concentration
+ */
+export const holderDistributionRule: ValidationRule = {
+  id: 'holder_distribution',
+  name: 'Holder Distribution',
+  description: 'Check top holder concentration',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const top10HolderPercent = (context as any).top10HolderPercent ?? 0;
+    const maxTop10Percent = 50; // Max 50% in top 10 holders
+    
+    if (top10HolderPercent > maxTop10Percent) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Top 10 holders own ${top10HolderPercent.toFixed(1)}% (max ${maxTop10Percent}%)`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
+/**
+ * Trading cooldown check - prevent rapid trading
+ */
+export const tradingCooldownRule: ValidationRule = {
+  id: 'trading_cooldown',
+  name: 'Trading Cooldown',
+  description: 'Minimum time between trades',
+  phase: 'pre',
+  enabled: true,
+  
+  validate(context: OrderContext): ValidationResult {
+    const lastTradeTime = (context as any).lastTradeTime ?? 0;
+    const cooldownMs = 60000; // 1 minute minimum
+    const timeSinceLastTrade = Date.now() - lastTradeTime;
+    
+    if (timeSinceLastTrade < cooldownMs) {
+      return {
+        valid: false,
+        action: 'block',
+        reason: `Cooldown: ${Math.ceil((cooldownMs - timeSinceLastTrade) / 1000)}s remaining`,
+      };
+    }
+    
+    return { valid: true, action: 'allow' };
+  },
+};
+
 // Default pre-trade rules
 export const defaultPreRules: ValidationRule[] = [
   maxOrderSizeRule,
@@ -481,6 +663,18 @@ export const defaultPreRules: ValidationRule[] = [
   maxDailyTradesRule,
   maxDailyLossRule,
   stopLossRequiredRule,
+  // Rug check rules (optional - enable as needed)
+  minLiquidityRule,
+  verifiedContractRule,
+  mintAuthorityRule,
+  holderDistributionRule,
+  tradingCooldownRule,
+];
+
+// Rug check rules (disabled by default - for high-risk token trading)
+export const rugCheckRules: ValidationRule[] = [
+  honeypotCheckRule,
+  ownershipRenouncedRule,
 ];
 
 // Default post-trade rules

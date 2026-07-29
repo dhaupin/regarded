@@ -835,6 +835,9 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     const position = this.positions.get(signal.symbol);
     const positionSize = position ? position.amount * position.entryPrice : 0;
     
+    // Get portfolio value
+    const portfolio = await this.getPortfolio();
+    
     // Build context
     const context: OrderContext = {
       order: {
@@ -851,8 +854,20 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       positionSize,
       dailyTradeCount: this.dailyTrades,
       dailyLoss: this.dailyPnl,
-      portfolioValue: await this.getPortfolio().then(p => p.totalValue),
+      portfolioValue: portfolio.totalValue,
     };
+    
+    // Run custom rules validator if provided
+    if (this.config.validator) {
+      const result = await this.config.validator.validate(context);
+      if (!result.valid || result.action === 'block') {
+        return result;
+      }
+      // If modify, apply changes to signal
+      if (result.action === 'modify' && result.modifiedOrder) {
+        signal.price = result.modifiedOrder.price ?? signal.price;
+      }
+    }
     
     // Use connector's validator if available
     if ('validateOrder' in connector) {
