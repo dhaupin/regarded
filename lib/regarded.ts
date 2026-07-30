@@ -73,6 +73,9 @@ export * from './webhooks';
 // Telegram - Bot notifications
 export * from './telegram';
 
+// Notify - Unified notification system
+export * from './notify';
+
 // Portfolio / Position Management
 export * from './portfolio';
 

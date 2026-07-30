@@ -360,6 +360,93 @@ export class WebhookManager extends Emitter<WebhookEvents> {
       return { ok: false, error: e.message };
     }
   }
+
+  /**
+   * Handle incoming HTTP request (for Cloudflare Workers / Hono)
+   * Returns response object compatible with Workers
+   */
+  async handleRequest(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname.slice(1); // Remove leading /
+    
+    // CORS headers
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Signature-256, X-Signature',
+    };
+
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
+    // Health check endpoint
+    if (path === 'health' || path === '') {
+      return new Response(
+        JSON.stringify({ status: 'ok', webhooks: this.webhooks.size }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+
+    // Get webhook info
+    if (request.method === 'GET' && path.startsWith('info')) {
+      const source = path.split('/')[1] || path.split('/')[0];
+      const webhook = this.webhooks.get(source);
+      return new Response(
+        JSON.stringify(webhook || { error: 'Not found' }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+
+    // Webhook event (POST)
+    if (request.method === 'POST') {
+      // Find webhook by path
+      const webhook = this.webhooks.get(path);
+      if (!webhook) {
+        return new Response(
+          JSON.stringify({ error: 'Webhook not found' }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      // Get signature from headers
+      const signatureHeader = webhook.signatureHeader || 'x-signature-256';
+      const signature = request.headers.get(signatureHeader) || request.headers.get('x-signature') || undefined;
+
+      // Get request body
+      const payload = await request.text();
+
+      // Process the webhook
+      const result = await this.processRequest(path, payload, signature);
+
+      if (!result.received) {
+        const status = result.error === 'Invalid signature' ? 401 : 404;
+        return new Response(
+          JSON.stringify({ error: result.error }),
+          { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      if (result.filtered) {
+        return new Response(
+          JSON.stringify({ filtered: true, event: result.event }),
+          { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ received: true, event: result.event, source: result.source }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+
+    // Not found
+    return new Response(
+      JSON.stringify({ error: 'Not found' }),
+      { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    );
+  }
 }
 
 // ============================================================================
@@ -440,4 +527,12 @@ export function sendWebhook(
  */
 export function verifySignature(payload: string, signature: string, secret: string): boolean {
   return getWebhookManager().verifySignature(payload, signature, secret);
+}
+
+/**
+ * Handle HTTP request (uses default manager)
+ * For Cloudflare Workers / Hono integration
+ */
+export function handleRequest(request: Request): Promise<Response> {
+  return getWebhookManager().handleRequest(request);
 }
