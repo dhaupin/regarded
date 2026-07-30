@@ -3,10 +3,12 @@
  * 
  * Task scheduling, health checks, periodic jobs.
  * Inspired by Vant's scheduler module.
+ * Uses: error, event, storage
  */
 
 import { createError, ErrorCode, errors } from './error';
 import { EventEmitter } from './event';
+import { type Storage, createJSONStorage } from './storage';
 
 export interface SchedulerEvents {
   'scheduler:job-start': { jobId: string; name: string };
@@ -166,13 +168,14 @@ export class CronParser {
  */
 export class Scheduler extends EventEmitter<SchedulerEvents> {
   private config: SchedulerConfig;
+  private storage?: Storage;
   private jobs = new Map<string, ScheduledJob>();
   private runningJobs = new Map<string, RunningJob>();
   private healthStatus: HealthStatus;
   private intervalId?: ReturnType<typeof setInterval>;
   private healthCheckId?: ReturnType<typeof setInterval>;
   
-  constructor(config: Partial<SchedulerConfig> = {}) {
+  constructor(config: Partial<SchedulerConfig> = {}, storage?: Storage) {
     super();
     this.config = {
       maxConcurrent: config.maxConcurrent ?? 5,
@@ -180,6 +183,7 @@ export class Scheduler extends EventEmitter<SchedulerEvents> {
       enableHealthChecks: config.enableHealthChecks ?? true,
       healthCheckInterval: config.healthCheckInterval ?? 60000,
     };
+    this.storage = storage;
     
     this.healthStatus = {
       healthy: true,
@@ -188,6 +192,72 @@ export class Scheduler extends EventEmitter<SchedulerEvents> {
       lastHealthCheck: Date.now(),
       jobStatuses: {},
     };
+  }
+
+  /**
+   * Get storage key
+   */
+  private getStorageKey(): string {
+    return 'scheduler:jobs';
+  }
+
+  /**
+   * Save scheduler state (job lastRun times, run counts)
+   */
+  async save(): Promise<void> {
+    if (!this.storage) return;
+    
+    const state = {
+      jobs: Array.from(this.jobs.entries()).map(([id, job]) => ({
+        id,
+        lastRun: job.lastRun,
+        nextRun: job.nextRun,
+        runCount: job.runCount,
+        errorCount: job.errorCount,
+        lastError: job.lastError,
+      })),
+      healthStatus: this.healthStatus,
+    };
+    
+    const jsonStorage = createJSONStorage(this.storage, this.getStorageKey());
+    await jsonStorage.save(state);
+  }
+
+  /**
+   * Load scheduler state
+   */
+  async load(): Promise<boolean> {
+    if (!this.storage) return false;
+    
+    type SchedulerState = {
+      jobs: { id: string; lastRun?: number; nextRun?: number; runCount: number; errorCount: number; lastError?: string }[];
+      healthStatus: HealthStatus;
+    };
+    
+    const jsonStorage = createJSONStorage<SchedulerState>(this.storage, this.getStorageKey());
+    const state = await jsonStorage.load();
+    
+    if (!state) return false;
+    
+    try {
+      // Restore job run info (not full jobs - those are added via addJob)
+      for (const jobState of state.jobs) {
+        const job = this.jobs.get(jobState.id);
+        if (job) {
+          job.lastRun = jobState.lastRun;
+          job.nextRun = jobState.nextRun;
+          job.runCount = jobState.runCount;
+          job.errorCount = jobState.errorCount;
+          job.lastError = jobState.lastError;
+        }
+      }
+      
+      this.healthStatus = state.healthStatus;
+      return true;
+    } catch (error) {
+      console.error('Failed to load scheduler state:', error);
+      return false;
+    }
   }
   
   /**
@@ -495,8 +565,10 @@ export class Heartbeat extends EventEmitter<Omit<SchedulerEvents, 'scheduler:job
   
   /**
    * Get time since last beat
+   * Returns 0 if heartbeat has never started or was stopped
    */
   getTimeSinceBeat(): number {
+    if (this.lastBeat === 0) return 0;
     return Date.now() - this.lastBeat;
   }
   
@@ -515,6 +587,8 @@ export class Heartbeat extends EventEmitter<Omit<SchedulerEvents, 'scheduler:job
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
     }
+    // Reset last beat so getTimeSinceBeat() returns 0 when stopped
+    this.lastBeat = 0;
   }
 }
 

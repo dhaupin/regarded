@@ -3,12 +3,14 @@
  * 
  * JWT tokens, session management, lockout after failed attempts.
  * Emits events: auth:login, auth:logout, auth:failed, auth:locked
+ * Uses: event, encrypt, audit, storage
  */
 
 import { EventEmitter } from './event';
 import type { User, Session, UserRole, UserSettings } from './types';
 import { generateToken, hashSHA256, secureCompare } from './encrypt';
 import { logAuditEvent } from './audit';
+import { type Storage, createJSONStorage } from './storage';
 
 export interface AuthEvents {
   'auth:login': { userId: string; method: string };
@@ -38,11 +40,72 @@ export interface JWTPayload {
  */
 export class AuthManager extends EventEmitter<AuthEvents> {
   private config: AuthConfig;
+  private storage?: Storage;
   private failedAttempts: Map<string, { count: number; lockoutUntil: number }> = new Map();
   
-  constructor(config: AuthConfig) {
+  constructor(config: AuthConfig, storage?: Storage) {
     super();
     this.config = config;
+    this.storage = storage;
+  }
+
+  /**
+   * Get storage key for failed attempts
+   */
+  private getStorageKey(): string {
+    return 'auth:failed-attempts';
+  }
+
+  /**
+   * Save failed attempts to storage
+   */
+  async save(): Promise<void> {
+    if (!this.storage) return;
+    
+    // Clean expired entries before saving
+    const now = Date.now();
+    for (const [key, attempt] of this.failedAttempts) {
+      if (now > attempt.lockoutUntil) {
+        this.failedAttempts.delete(key);
+      }
+    }
+    
+    const state = Array.from(this.failedAttempts.entries());
+    const jsonStorage = createJSONStorage(this.storage, this.getStorageKey());
+    await jsonStorage.save(state as any);
+  }
+
+  /**
+   * Load failed attempts from storage
+   */
+  async load(): Promise<boolean> {
+    if (!this.storage) return false;
+    
+    const jsonStorage = createJSONStorage<[string, { count: number; lockoutUntil: number }][]>(this.storage, this.getStorageKey());
+    const state = await jsonStorage.load();
+    
+    if (!state) return false;
+    
+    try {
+      this.failedAttempts = new Map(state);
+      
+      // Clean expired entries
+      const now = Date.now();
+      for (const [key, attempt] of this.failedAttempts) {
+        if (now > attempt.lockoutUntil) {
+          this.failedAttempts.delete(key);
+        }
+      }
+      
+      logAuditEvent('auth_loaded' as any, 'auth', { 
+        failedAttemptsCount: this.failedAttempts.size 
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to load auth state:', error);
+      return false;
+    }
   }
   
   /**

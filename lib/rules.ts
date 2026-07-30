@@ -3,6 +3,7 @@
  * 
  * Evaluate conditions, execute triggers, manage rule chaining.
  * Emits events: rule:triggered, rule:violated, rule:created
+ * Uses: event, indicators, patterns, audit, psy, storage
  */
 
 import { EventEmitter } from './event';
@@ -17,6 +18,7 @@ import {
   VolatilityRegime,
   TradingSession 
 } from './psy';
+import { type Storage, createJSONStorage } from './storage';
 
 export interface RulesEvents {
   'rule:triggered': { ruleName: string; context: any };
@@ -40,13 +42,69 @@ export interface ConditionContext {
  */
 export class RulesEngine extends EventEmitter<RulesEvents> {
   private config: RulesEngineConfig;
+  private storage?: Storage;
   private state: RulesEngineState;
   private triggeredRules = new Set<string>();
   
-  constructor(config: Partial<RulesEngineConfig> = {}) {
+  constructor(config: Partial<RulesEngineConfig> = {}, storage?: Storage) {
     super();
     this.config = { maxChainDepth: config.maxChainDepth ?? 5 };
     this.state = this.createInitialState();
+    this.storage = storage;
+  }
+
+  /**
+   * Get storage key
+   */
+  private getStorageKey(): string {
+    return 'rules:engine-state';
+  }
+
+  /**
+   * Save rules engine state
+   */
+  async save(): Promise<void> {
+    if (!this.storage) return;
+    
+    const state = {
+      execution: this.state.execution,
+      risk: this.state.risk,
+      chain_depth: this.state.chain_depth,
+      triggeredRules: Array.from(this.triggeredRules),
+    };
+    
+    const jsonStorage = createJSONStorage(this.storage, this.getStorageKey());
+    await jsonStorage.save(state);
+  }
+
+  /**
+   * Load rules engine state
+   */
+  async load(): Promise<boolean> {
+    if (!this.storage) return false;
+    
+    type RulesState = {
+      execution: { rules_evaluated: number; rules_triggered: number; trades_executed: number; errors: string[] };
+      risk: { current_multiplier: number; session_risk: number; positions_at_risk: number };
+      chain_depth: number;
+      triggeredRules: string[];
+    };
+    
+    const jsonStorage = createJSONStorage<RulesState>(this.storage, this.getStorageKey());
+    const state = await jsonStorage.load();
+    
+    if (!state) return false;
+    
+    try {
+      this.state.execution = state.execution;
+      this.state.risk = state.risk;
+      this.state.chain_depth = state.chain_depth;
+      this.triggeredRules = new Set(state.triggeredRules);
+      return true;
+    } catch (error) {
+      console.error('Failed to load rules engine state:', error);
+      return false;
+    }
   }
   
   private createInitialState(): RulesEngineState {

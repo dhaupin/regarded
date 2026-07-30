@@ -3,12 +3,14 @@
  * 
  * Common interface for HTTP requests used by connectors.
  * Inspired by Vant's network module.
+ * Uses: qos, cache, error, event, utils
  */
 
 import { CircuitBreaker, QoSManager, createQoSManager } from './qos';
 import { LRUCache } from './cache';
 import { createError, ErrorCode, isOperationalError, toRegardedError } from './error';
 import { EventEmitter } from './event';
+import { safeJsonParse } from './utils';
 
 export interface NetworkEvents {
   'network:request': { url: string; method: string; duration: number; status: number };
@@ -163,13 +165,7 @@ export class Network extends EventEmitter<NetworkEvents> {
         clearTimeout(timeoutId);
         
         const data = await response.text();
-        let parsed: T | undefined;
-        
-        try {
-          parsed = JSON.parse(data) as T;
-        } catch {
-          // Not JSON
-        }
+        const parsed = safeJsonParse<T>(data);
         
         const headers: Record<string, string> = {};
         response.headers.forEach((value, key) => {

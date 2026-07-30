@@ -3,12 +3,14 @@
  * 
  * Centralized exchange (CEX) connector for Kraken.
  * Supports both paper and live trading.
+ * Uses: base, error, audit, utils
  */
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
 import { BaseConnector } from './base';
 import { createError, ErrorCode } from '../error';
 import { logAuditEvent } from '../audit';
+import { generateId } from '../utils';
 
 export class KrakenConnector extends BaseConnector {
   name = 'Kraken';
@@ -143,8 +145,9 @@ export class KrakenConnector extends BaseConnector {
     
     if (this.paperMode) {
       const price = order.price ?? await this.getPrice(order.pair);
+      const now = Date.now();
       return {
-        id: `paper_${Date.now()}`,
+        id: generateId('paper'),
         pair: order.pair,
         side: order.side,
         type: order.type,
@@ -154,8 +157,8 @@ export class KrakenConnector extends BaseConnector {
         avg_price: price,
         fee: order.amount * price * 0.001,
         status: 'filled',
-        created_at: Date.now(),
-        filled_at: Date.now(),
+        created_at: now,
+        filled_at: now,
       };
     }
     

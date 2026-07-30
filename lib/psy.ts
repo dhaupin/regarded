@@ -3,13 +3,14 @@
  *
  * Analyzes market sentiment and psychology for trading decisions.
  * Includes sell-the-news, buy-the-dip, and momentum exhaustion detection.
- * Uses existing regarded modules: error, audit, news, indicators, cache.
+ * Uses existing regarded modules: error, audit, news, indicators, cache, storage.
  */
 
 import { createError, ErrorCode } from './error';
 import { logAuditEvent } from './audit';
 import type { Candle } from './types';
 import { calculateIndicator, IndicatorType } from './indicators';
+import { type Storage, createJSONStorage } from './storage';
 
 // ============================================================================
 // Types
@@ -70,10 +71,50 @@ const DEFAULT_CONFIG: Required<PsychologyConfig> = {
 
 export class MarketPsychology {
   private config: Required<PsychologyConfig>;
+  private storage?: Storage;
   private lastAnalysis: Map<string, PsychologyResult> = new Map();
 
-  constructor(config: PsychologyConfig = {}) {
+  constructor(config: PsychologyConfig = {}, storage?: Storage) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.storage = storage;
+  }
+
+  /**
+   * Get storage key
+   */
+  private getStorageKey(): string {
+    return 'psy:last-analysis';
+  }
+
+  /**
+   * Save psychology analysis state
+   */
+  async save(): Promise<void> {
+    if (!this.storage) return;
+    
+    const state = Array.from(this.lastAnalysis.entries());
+    const jsonStorage = createJSONStorage(this.storage, this.getStorageKey());
+    await jsonStorage.save(state as any);
+  }
+
+  /**
+   * Load psychology analysis state
+   */
+  async load(): Promise<boolean> {
+    if (!this.storage) return false;
+    
+    const jsonStorage = createJSONStorage<[string, PsychologyResult][]>(this.storage, this.getStorageKey());
+    const state = await jsonStorage.load();
+    
+    if (!state) return false;
+    
+    try {
+      this.lastAnalysis = new Map(state);
+      return true;
+    } catch (error) {
+      console.error('Failed to load psychology state:', error);
+      return false;
+    }
   }
 
   /**
