@@ -7,6 +7,7 @@
 
 import { EventEmitter, type Emitter } from '../event';
 import { createError, ErrorCode } from '../error';
+import { logAuditEvent, initAuditLogger, type AuditLoggerConfig } from '../audit';
 
 // ============================================================================
 // Types
@@ -71,6 +72,30 @@ export abstract class BaseAdapter extends Emitter<AdapterEvents> {
     super();
     this.enabled = config?.enabled ?? true;
     this.defaultDestination = config?.defaultDestination;
+  }
+
+  /**
+   * Initialize audit logger (call once at app startup)
+   */
+  static initAudit(config: AuditLoggerConfig): void {
+    initAuditLogger(config);
+  }
+
+  /**
+   * Log security event to audit
+   */
+  protected async audit(eventType: string, details: Record<string, any>): Promise<void> {
+    try {
+      await logAuditEvent(
+        eventType as any,
+        'system',
+        { adapter: this.name, adapterType: this.type, ...details },
+        'low'
+      );
+    } catch (e) {
+      // Audit failure shouldn't break adapters
+      console.warn('Audit log failed:', e);
+    }
   }
 
   /**

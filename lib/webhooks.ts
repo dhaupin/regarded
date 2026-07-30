@@ -10,6 +10,7 @@ import { createNetwork, type RequestOptions } from './network';
 import { createError, ErrorCode } from './error';
 import { EventEmitter, type Emitter } from './event';
 import { safeJsonParse } from './utils';
+import { logAuditEvent, initAuditLogger, type AuditLoggerConfig } from './audit';
 
 // ============================================================================
 // Types
@@ -81,6 +82,30 @@ export class WebhookManager extends Emitter<WebhookEvents> {
     super();
     this.webhookSecret = config?.secret;
     this.webhookUrl = config?.url;
+  }
+
+  /**
+   * Initialize audit logger (call once at app startup)
+   */
+  initAudit(config: AuditLoggerConfig): void {
+    initAuditLogger(config);
+  }
+
+  /**
+   * Log security event to audit
+   */
+  private async audit(eventType: string, details: Record<string, any>): Promise<void> {
+    try {
+      await logAuditEvent(
+        eventType as any,
+        'system',
+        { source: 'webhook', ...details },
+        'low'
+      );
+    } catch (e) {
+      // Audit failure shouldn't break webhooks
+      console.warn('Audit log failed:', e);
+    }
   }
 
   /**
@@ -277,6 +302,7 @@ export class WebhookManager extends Emitter<WebhookEvents> {
     // Verify signature
     if (signature && webhook.secret) {
       if (!this.verifySignature(payload, signature, webhook.secret)) {
+        await this.audit('security_webhook_signature_failed', { source, hasSignature: !!signature });
         return { received: false, error: 'Invalid signature' };
       }
     }
@@ -284,6 +310,7 @@ export class WebhookManager extends Emitter<WebhookEvents> {
     // Parse payload
     const body = safeJsonParse(payload);
     if (!body) {
+      await this.audit('security_webhook_parse_failed', { source });
       return { received: false, error: 'Invalid JSON payload' };
     }
 
@@ -302,6 +329,7 @@ export class WebhookManager extends Emitter<WebhookEvents> {
         payload: body,
         timestamp: Date.now(),
       });
+      await this.audit('webhook_filtered', { source, eventType });
       return { received: true, event: eventType, source, filtered: true };
     }
 
@@ -315,6 +343,7 @@ export class WebhookManager extends Emitter<WebhookEvents> {
 
     this.emit('webhook:event', webhookEvent);
     this.emit('webhook:received', webhookEvent);
+    await this.audit('webhook_received', { source, eventType });
 
     return { received: true, event: eventType, source };
   }
