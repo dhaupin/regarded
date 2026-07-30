@@ -2,6 +2,7 @@
  * Base Connector Class
  * 
  * Abstract base class for all exchange connectors.
+ * Uses: event, rules, utils
  */
 
 import type {
@@ -23,6 +24,7 @@ import {
   defaultPreRules,
   defaultPostRules 
 } from '../rules';
+import { parsePair } from '../utils';
 
 export interface ConnectorEvents {
   'connector:order-placed': { orderId: string; exchange: string; symbol: string; side: string; amount: number };
@@ -63,12 +65,11 @@ export abstract class BaseConnector extends EventEmitter<ConnectorEvents> implem
     
     // Get balance
     const balances = await this.getBalance();
-    const baseAsset = order.pair.split('/')[0];
-    const quoteAsset = order.pair.split('/')[1];
+    const { base, quote } = parsePair(order.pair);
     
     let availableBalance = 0;
     for (const bal of balances) {
-      if (bal.asset === quoteAsset) {
+      if (bal.asset === quote) {
         availableBalance = bal.available;
       }
     }

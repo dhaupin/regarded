@@ -1,0 +1,20 @@
+name = "regarded-backend"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+node_compat = true
+
+# D2 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "regarded-db"
+database_id = "your-database-id-here"  # Replace after creating D2
+
+# KV Namespace for sessions, cache, configs
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id-here"  # Replace after creating KV
+
+# Environment variables (set via wrangler secret)
+# GOOGLE_CLIENT_ID
+# GOOGLE_CLIENT_SECRET
+# JWT_SECRET

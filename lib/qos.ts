@@ -3,11 +3,13 @@
  * 
  * Circuit breaker pattern, backpressure, recursion control.
  * Inspired by Vant's QoS module.
+ * Uses: cache, error, event, storage
  */
 
 import { LRUCache } from './cache';
 import { errors, createError, ErrorCode } from './error';
 import { EventEmitter } from './event';
+import { type Storage, createJSONStorage } from './storage';
 
 export enum CircuitState {
   CLOSED = 'closed',      // Normal operation
@@ -62,8 +64,9 @@ export class CircuitBreaker extends EventEmitter<Omit<QoSEvents, 'qos:rate-limit
   private concurrentRequests = 0;
   private queue: Array<() => void> = [];
   private name = 'default';
+  private storage?: Storage;
   
-  constructor(config: Partial<CircuitBreakerConfig> = {}, name?: string) {
+  constructor(config: Partial<CircuitBreakerConfig> = {}, name?: string, storage?: Storage) {
     super();
     this.config = {
       failureThreshold: config.failureThreshold ?? 5,
@@ -73,6 +76,73 @@ export class CircuitBreaker extends EventEmitter<Omit<QoSEvents, 'qos:rate-limit
       maxQueueSize: config.maxQueueSize ?? 100,
     };
     this.name = name || 'default';
+    this.storage = storage;
+  }
+
+  /**
+   * Get storage key
+   */
+  private getStorageKey(): string {
+    return `qos:breaker:${this.name}`;
+  }
+
+  /**
+   * Save circuit breaker state
+   */
+  async save(): Promise<void> {
+    if (!this.storage) return;
+    
+    const state = {
+      state: this.state,
+      failures: this.failures,
+      successes: this.successes,
+      totalRequests: this.totalRequests,
+      rejectedRequests: this.rejectedRequests,
+      lastFailureTime: this.lastFailureTime,
+      lastSuccessTime: this.lastSuccessTime,
+      openedAt: this.openedAt,
+    };
+    
+    const jsonStorage = createJSONStorage(this.storage, this.getStorageKey());
+    await jsonStorage.save(state);
+  }
+
+  /**
+   * Load circuit breaker state
+   */
+  async load(): Promise<boolean> {
+    if (!this.storage) return false;
+    
+    type CircuitStateType = {
+      state: CircuitState;
+      failures: number;
+      successes: number;
+      totalRequests: number;
+      rejectedRequests: number;
+      lastFailureTime: number;
+      lastSuccessTime: number;
+      openedAt: number;
+    };
+    
+    const jsonStorage = createJSONStorage<CircuitStateType>(this.storage, this.getStorageKey());
+    const state = await jsonStorage.load();
+    
+    if (!state) return false;
+    
+    try {
+      this.state = state.state;
+      this.failures = state.failures;
+      this.successes = state.successes;
+      this.totalRequests = state.totalRequests;
+      this.rejectedRequests = state.rejectedRequests;
+      this.lastFailureTime = state.lastFailureTime;
+      this.lastSuccessTime = state.lastSuccessTime;
+      this.openedAt = state.openedAt;
+      return true;
+    } catch (error) {
+      console.error('Failed to load circuit breaker state:', error);
+      return false;
+    }
   }
   
   /**
