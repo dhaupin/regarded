@@ -7,7 +7,7 @@
 
 import { BaseAdapter, type AdapterConfig, type SendOptions, type AdapterResult, type AdapterStatus, registerAdapter } from './base';
 import { createNetwork } from '../network';
-import { createError, ErrorCode } from '../error';
+import { createError, ErrorCode, errors } from '../error';
 
 export interface DiscordAdapterConfig extends AdapterConfig {
   /** Bot token */
@@ -127,9 +127,8 @@ export class DiscordAdapter extends BaseAdapter {
         }
       );
 
-      const data = await response.json();
-      
       if (response.ok) {
+        const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
         this.emit('adapter:message-sent', {
           adapter: this.name,
           destination,
@@ -137,7 +136,8 @@ export class DiscordAdapter extends BaseAdapter {
         });
         return { success: true, messageId: data.id };
       } else {
-        return { success: false, error: data.message || 'Failed' };
+        const errData = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+        return { success: false, error: errData.message || 'Failed' };
       }
     } catch (e: any) {
       this.emit('adapter:message-failed', {
@@ -164,7 +164,7 @@ export class DiscordAdapter extends BaseAdapter {
     }
 
     try {
-      const response = await this.network.get('https://discord.com/api/v10/users/@me', {
+      const response = await this.network.get('https://discord.com/api/v10/users/@me', undefined, {
         headers: { 'Authorization': `Bot ${this.botToken}` },
       });
       this.connected = response.ok;

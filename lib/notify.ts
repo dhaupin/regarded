@@ -5,8 +5,8 @@
  * Uses: event, error, utils
  */
 
-import { EventEmitter, type Emitter } from './event';
-import { createError, ErrorCode } from './error';
+import { EventEmitter } from './event';
+import { createError, ErrorCode, errors } from './error';
 
 // ============================================================================
 // Types
@@ -87,7 +87,7 @@ export interface NotifyEvents {
 // Notify Manager
 // ============================================================================
 
-export class NotifyManager extends Emitter<NotifyEvents> {
+export class NotifyManager extends EventEmitter<NotifyEvents> {
   private channels = new Map<NotificationChannel, ChannelConfig>();
   private telegram?: TelegramConfig;
   private discord?: DiscordConfig;

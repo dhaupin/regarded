@@ -7,8 +7,8 @@
  */
 
 import { createNetwork, type RequestOptions } from './network';
-import { createError, ErrorCode } from './error';
-import { EventEmitter, type Emitter } from './event';
+import { createError, ErrorCode, errors } from './error';
+import { EventEmitter } from './event';
 import { safeJsonParse } from './utils';
 import { logAuditEvent, initAuditLogger, type AuditLoggerConfig } from './audit';
 
@@ -69,7 +69,7 @@ export interface WebhookEvents {
 // Webhook Manager
 // ============================================================================
 
-export class WebhookManager extends Emitter<WebhookEvents> {
+export class WebhookManager extends EventEmitter<WebhookEvents> {
   private webhooks = new Map<string, WebhookConfig>();
   private filters = new Map<string, string>();
   private network = createNetwork({});

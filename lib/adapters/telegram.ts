@@ -7,7 +7,7 @@
 
 import { BaseAdapter, type AdapterConfig, type SendOptions, type AdapterResult, type AdapterStatus, registerAdapter } from './base';
 import { createNetwork } from '../network';
-import { createError, ErrorCode } from '../error';
+import { createError, ErrorCode, errors } from '../error';
 import { safeJsonParse } from '../utils';
 
 export interface TelegramAdapterConfig extends AdapterConfig {
@@ -64,7 +64,7 @@ export class TelegramAdapter extends BaseAdapter {
   private getApiBase(): string {
     if (!this.botToken) {
       throw createError({
-        code: ErrorCode.CONFIGURATION_ERROR,
+        code: ErrorCode.VALIDATION_FAILED,
         message: 'Telegram bot token not configured',
       });
     }
@@ -82,14 +82,14 @@ export class TelegramAdapter extends BaseAdapter {
     });
 
     if (!result.ok) {
-      const error = safeJsonParse(result.data as string) as any;
+      const error = safeJsonParse(result.data as string, null) as any;
       throw createError({
-        code: ErrorCode.API_RESPONSE_ERROR,
+        code: ErrorCode.EXCHANGE_ERROR,
         message: `Telegram API error: ${error?.description || result.statusText}`,
       });
     }
 
-    const data = safeJsonParse(result.data as string) as any;
+    const data = safeJsonParse(result.data as string, null) as any;
     return data.result;
   }
 

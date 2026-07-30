@@ -165,7 +165,7 @@ export class Network extends EventEmitter<NetworkEvents> {
         clearTimeout(timeoutId);
         
         const data = await response.text();
-        const parsed = safeJsonParse<T>(data);
+        const parsed = safeJsonParse<T>(data, undefined as unknown as T);
         
         const headers: Record<string, string> = {};
         response.headers.forEach((value, key) => {

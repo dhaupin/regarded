@@ -123,7 +123,7 @@ export function createAndRegister(
   type: 'telegram' | 'discord' | 'slack' | 'webhook',
   ...args: any[]
 ): BaseAdapter {
-  const adapter = createAdapter(type, ...args);
+  const adapter = (createAdapter as any)(type, ...args);
   registerAdapter(name, adapter);
   return adapter;
 }

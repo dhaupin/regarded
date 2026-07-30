@@ -6,8 +6,8 @@
  */
 
 import { createNetwork } from './network';
-import { createError, ErrorCode } from './error';
-import { EventEmitter, type Emitter } from './event';
+import { createError, ErrorCode, errors } from './error';
+import { EventEmitter } from './event';
 import { safeJsonParse } from './utils';
 
 // ============================================================================
@@ -101,7 +101,7 @@ export interface TelegramEvents {
 // Telegram Bot
 // ============================================================================
 
-export class TelegramBot extends Emitter<TelegramEvents> {
+export class TelegramBot extends EventEmitter<TelegramEvents> {
   private botToken?: string;
   private defaultChatId?: string;
   private network = createNetwork({});
@@ -136,7 +136,7 @@ export class TelegramBot extends Emitter<TelegramEvents> {
   private getApiBase(): string {
     if (!this.botToken) {
       throw createError({
-        code: ErrorCode.CONFIGURATION_ERROR,
+        code: ErrorCode.VALIDATION_FAILED,
         message: 'Telegram bot token not set',
       });
     }
@@ -154,14 +154,14 @@ export class TelegramBot extends Emitter<TelegramEvents> {
     });
 
     if (!result.ok) {
-      const error = safeJsonParse(result.data as string) as any;
+      const error = safeJsonParse(result.data as string, null) as any;
       throw createError({
-        code: ErrorCode.API_RESPONSE_ERROR,
+        code: ErrorCode.EXCHANGE_ERROR,
         message: `Telegram API error: ${error?.description || result.statusText}`,
       });
     }
 
-    const data = safeJsonParse(result.data as string) as any;
+    const data = safeJsonParse(result.data as string, null) as any;
     return data.result;
   }
 
@@ -213,7 +213,7 @@ export class TelegramBot extends Emitter<TelegramEvents> {
   async notify(text: string, options?: SendMessageOptions): Promise<TelegramMessage | undefined> {
     if (!this.defaultChatId) {
       throw createError({
-        code: ErrorCode.CONFIGURATION_ERROR,
+        code: ErrorCode.VALIDATION_FAILED,
         message: 'Default chat ID not set',
       });
     }
@@ -379,7 +379,7 @@ export class TelegramBot extends Emitter<TelegramEvents> {
   async startPolling(timeout: number = 60): Promise<void> {
     if (!this.botToken) {
       throw createError({
-        code: ErrorCode.CONFIGURATION_ERROR,
+        code: ErrorCode.VALIDATION_FAILED,
         message: 'Telegram bot token not set',
       });
     }
