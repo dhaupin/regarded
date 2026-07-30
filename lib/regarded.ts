@@ -67,6 +67,12 @@ export * from './news';
 // Market Psychology
 export * from './psy';
 
+// Webhooks - External signal input & notifications
+export * from './webhooks';
+
+// Telegram - Bot notifications
+export * from './telegram';
+
 // Portfolio / Position Management
 export * from './portfolio';
 
