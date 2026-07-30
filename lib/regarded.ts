@@ -76,6 +76,9 @@ export * from './telegram';
 // Notify - Unified notification system
 export * from './notify';
 
+// Adapters - Notification adapters (telegram, discord, slack, webhook)
+export * from './adapters';
+
 // Portfolio / Position Management
 export * from './portfolio';
 
