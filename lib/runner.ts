@@ -30,6 +30,7 @@ import { createError, ErrorCode } from './error';
 import { createMarketPsychology, PsychologyConfig, PsychologyResult, NewsAnalysis, createNewsAnalysis } from './psy';
 import { Portfolio, createPortfolio, type Position } from './portfolio';
 import { Guard, createGuard, GuardConfig, GuardResult, GuardReasonCode, type TradingWindow, type TradingSchedule, type NewsBlackoutPeriod } from './guard';
+import { type Storage } from './storage';
 
 // ============================================================================
 // Types
@@ -79,6 +80,8 @@ export interface AgentConfig {
     /** Config for default service */
     config?: Partial<import('./psy').PsychologyConfig>;
   };
+  /** Storage for state persistence (optional) */
+  storage?: Storage;
 }
 
 export interface Signal {
@@ -178,6 +181,7 @@ export interface RunnerEvents {
 
 export class TradingAgent extends EventEmitter<RunnerEvents> {
   private config: AgentConfig;
+  private storage?: Storage;
   private running: boolean = false;
   private tickCount: number = 0;
   private scheduler: Scheduler;
@@ -196,18 +200,21 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       ...config,
     };
     
+    // Store storage reference
+    this.storage = config.storage;
+    
     // Create scheduler
     this.scheduler = createScheduler({ enableHeartbeat: false });
     
-    // Create portfolio with guard config
+    // Create portfolio with guard config and storage
     this.portfolio = createPortfolio({
       maxPositions: config.guard?.maxPositions ?? 5,
       maxDailyLoss: config.guard?.maxDailyLoss ?? 1000,
       maxDailyTrades: config.guard?.maxDailyTrades ?? 20,
-    });
+    }, this.storage);
     
-    // Create guard with config or defaults
-    this.guard = createGuard(config.guard);
+    // Create guard with config or defaults and storage
+    this.guard = createGuard(config.guard, this.storage);
     
     // Create QoS manager for circuit breaker
     this.qos = createQoSManager();
@@ -260,6 +267,65 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
     for (const connector of this.config.connectors) {
       connector.setPaperMode(this.config.paperMode!);
     }
+  }
+
+  /**
+   * Get storage key prefix for this agent
+   */
+  private getStorageKey(prefix: string): string {
+    return `agent:${prefix}`;
+  }
+
+  /**
+   * Save agent state to storage
+   * Persists portfolio, guard, scheduler, and psychology state
+   */
+  async save(): Promise<void> {
+    if (!this.storage) return;
+    
+    // Save portfolio state
+    await this.portfolio.save();
+    
+    // Save guard state
+    await this.guard.save();
+    
+    // Save scheduler state
+    await this.scheduler.save();
+    
+    // Save psychology state if enabled
+    if (this.psychology) {
+      await this.psychology.save();
+    }
+  }
+
+  /**
+   * Load agent state from storage
+   * Restores portfolio, guard, scheduler, and psychology state
+   */
+  async load(): Promise<boolean> {
+    if (!this.storage) return false;
+    
+    let allLoaded = true;
+    
+    // Load portfolio state
+    const portfolioLoaded = await this.portfolio.load();
+    if (!portfolioLoaded) allLoaded = false;
+    
+    // Load guard state
+    const guardLoaded = await this.guard.load();
+    if (!guardLoaded) allLoaded = false;
+    
+    // Load scheduler state
+    const schedulerLoaded = await this.scheduler.load();
+    if (!schedulerLoaded) allLoaded = false;
+    
+    // Load psychology state if enabled
+    if (this.psychology) {
+      const psyLoaded = await this.psychology.load();
+      if (!psyLoaded) allLoaded = false;
+    }
+    
+    return allLoaded;
   }
   
   /**

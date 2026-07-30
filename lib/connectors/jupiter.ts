@@ -3,6 +3,7 @@
  * 
  * Solana DEX aggregator connector.
  * Note: Jupiter is an aggregator - use Solana wallet for execution.
+ * Uses: base, error, audit, utils
  */
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';

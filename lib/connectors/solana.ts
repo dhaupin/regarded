@@ -2,6 +2,7 @@
  * Solana Wallet Connector
  * 
  * Decentralized exchange (DEX) connector for Solana wallet.
+ * Uses: base, error, audit, utils
  */
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
