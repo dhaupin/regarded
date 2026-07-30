@@ -6,7 +6,7 @@
  * Uses: base, error, audit, utils
  */
 
-import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
+import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../types';
 import { BaseConnector } from './base';
 import { createError, ErrorCode } from '../error';
 import { logAuditEvent } from '../audit';
@@ -147,7 +147,7 @@ export class KrakenConnector extends BaseConnector {
       const price = order.price ?? await this.getPrice(order.pair);
       const now = Date.now();
       return {
-        id: generateId('paper'),
+        id: `paper-${generateId(8)}`,
         pair: order.pair,
         side: order.side,
         type: order.type,

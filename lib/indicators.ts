@@ -13,7 +13,8 @@ export abstract class BaseIndicator implements Indicator {
   params: Record<string, number>;
   
   constructor(params: Record<string, number> = {}) {
-    this.params = { ...this.defaultParams, ...params };
+    const defaults = (this.constructor as any).defaultParams || {};
+    this.params = { ...defaults, ...params };
   }
   
   abstract calculate(candles: Candle[]): IndicatorResult;
@@ -215,6 +216,7 @@ export function createIndicator(name: string): Indicator | undefined {
 export function calculateIndicator(name: string, candles: Candle[], params?: Record<string, number>): IndicatorResult | undefined {
   const indicator = createIndicator(name);
   if (!indicator) return undefined;
-  if (params) indicator.params = { ...indicator.defaultParams, ...params };
+  const baseIndicator = indicator as any;
+  if (params) indicator.params = { ...baseIndicator.defaultParams, ...params };
   return indicator.calculate(candles);
 }

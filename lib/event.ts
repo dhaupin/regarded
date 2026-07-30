@@ -50,18 +50,19 @@ export class EventEmitter<Events extends Record<string, any> = Record<string, an
    * Emit an event
    */
   emit<K extends keyof Events>(event: K, data?: Events[K]): void {
+    const eventKey = String(event);
     // Handle one-time listeners
-    if (this.onceEvents[event as string]) {
-      for (const callback of this.onceEvents[event as string]) {
-        try { callback(data); } catch (e) { console.error(`Event error: ${event}`, e); }
+    if (this.onceEvents[eventKey]) {
+      for (const callback of this.onceEvents[eventKey]) {
+        try { callback(data); } catch (e) { console.error(`Event error: ${eventKey}`, e); }
       }
-      delete this.onceEvents[event as string];
+      delete this.onceEvents[eventKey];
     }
     
     // Handle persistent listeners
-    if (this.events[event as string]) {
-      for (const callback of this.events[event as string]) {
-        try { callback(data); } catch (e) { console.error(`Event error: ${event}`, e); }
+    if (this.events[eventKey]) {
+      for (const callback of this.events[eventKey]) {
+        try { callback(data); } catch (e) { console.error(`Event error: ${eventKey}`, e); }
       }
     }
   }

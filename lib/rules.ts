@@ -142,11 +142,11 @@ export class RulesEngine extends EventEmitter<RulesEvents> {
     const candles = ctx.candles.get(ctx.timeframes[0]);
     if (!candles || candles.length === 0) return false;
     
-    const result = this.evaluateSingleCondition(condition.condition, candles);
+    const result = this.evaluateSingleCondition(condition.condition, candles, ctx);
     return condition.logic === 'and' ? result : result;
   }
   
-  private evaluateSingleCondition(condition: any, candles: Candle[]): boolean {
+  private evaluateSingleCondition(condition: any, candles: Candle[], ctx: ConditionContext): boolean {
     switch (condition.type) {
       case 'indicator':
         if (!condition.indicator) return false;
@@ -194,7 +194,7 @@ export class RulesEngine extends EventEmitter<RulesEvents> {
    */
   async evaluateRule(rule: Rule, ctx: ConditionContext, triggerFn?: (trigger: Trigger) => Promise<void>): Promise<EngineResult> {
     if (this.triggeredRules.has(rule.id)) {
-      return { triggered: false, actions_executed: 0, trades: [], errors: ['Already triggered'] };
+      return { triggered: false, actions_executed: 0, trades: [], errors: ['Already triggered'], metadata: {} };
     }
     
     this.state.execution.rules_evaluated++;
@@ -205,7 +205,7 @@ export class RulesEngine extends EventEmitter<RulesEvents> {
     if (!met) {
       // Emit violated event
       this.emit('rule:violated', { ruleName: rule.id, reason: 'Conditions not met' });
-      return { triggered: false, actions_executed: 0, trades: [], errors: [] };
+      return { triggered: false, actions_executed: 0, trades: [], errors: [], metadata: {} };
     }
     
     // Execute triggers
@@ -229,7 +229,7 @@ export class RulesEngine extends EventEmitter<RulesEvents> {
       actions_executed: actionsExecuted,
     }, 'medium').catch(() => {});
     
-    return { triggered: true, actions_executed: actionsExecuted, trades: [], errors: [] };
+    return { triggered: true, actions_executed: actionsExecuted, trades: [], errors: [], metadata: {} };
   }
   
   getState(): RulesEngineState { return this.state; }
@@ -780,8 +780,8 @@ export const psychologyRule: ValidationRule = {
     try {
       // Build options from context
       const options: Parameters<typeof guard.evaluate>[0] = {
-        symbol: context.symbol,
-        candles: context.candles as any,
+        symbol: context.order.pair,
+        candles: (context as any).candles,
         orderBook: (context as any).orderBook,
         whaleOrders: (context as any).whaleOrders,
       };
@@ -793,21 +793,21 @@ export const psychologyRule: ValidationRule = {
           valid: false,
           action: 'block',
           reason: `Psychology blocked: ${result.reasons.join('; ')}`,
-          details: result.checks,
+          metadata: result.checks,
         };
       }
       
       return { 
         valid: true, 
         action: 'allow',
-        details: result.checks,
+        metadata: result.checks,
       };
     } catch (error) {
       // Allow on error - psychology is advisory
       return { 
         valid: true, 
         action: 'allow',
-        details: { error: String(error) },
+        metadata: { error: String(error) },
       };
     }
   },

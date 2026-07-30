@@ -391,42 +391,46 @@ export class Scheduler extends EventEmitter<SchedulerEvents> {
     // Emit job start event
     this.emit('scheduler:job-start', { jobId: job.id, name: job.name });
     
-    const running: RunningJob = {
-      job,
-      startedAt: Date.now(),
-      promise: (async () => {
-        try {
-          job.lastRun = Date.now();
-          this.runningJobs.set(job.id, running);
-          this.updateHealthStatus();
-          
-          await job.handler();
-          
-          job.runCount++;
-          job.nextRun = CronParser.parse(job.schedule);
-          
-          // Emit job end event
-          this.emit('scheduler:job-end', { 
-            jobId: job.id, 
-            name: job.name, 
-            duration: Date.now() - startTime 
-          });
-        } catch (error) {
-          job.errorCount++;
-          job.lastError = error instanceof Error ? error.message : String(error);
-          
-          // Emit job error event
-          this.emit('scheduler:job-error', { 
-            jobId: job.id, 
-            name: job.name, 
-            error: job.lastError 
-          });
-        } finally {
-          this.runningJobs.delete(job.id);
-          this.updateHealthStatus();
-        }
-      })(),
-    };
+    // Create job reference first to avoid closure issues
+    const jobRef = job;
+    const startTimeRef = startTime;
+    
+    let running: RunningJob;
+    const promise = (async () => {
+      try {
+        jobRef.lastRun = Date.now();
+        // @ts-ignore - running is assigned immediately after this async function is created
+        this.runningJobs.set(jobRef.id, running);
+        this.updateHealthStatus();
+        
+        await jobRef.handler();
+        
+        jobRef.runCount++;
+        jobRef.nextRun = CronParser.parse(jobRef.schedule);
+        
+        // Emit job end event
+        this.emit('scheduler:job-end', { 
+          jobId: jobRef.id, 
+          name: jobRef.name, 
+          duration: Date.now() - startTimeRef 
+        });
+      } catch (error) {
+        jobRef.errorCount++;
+        jobRef.lastError = error instanceof Error ? error.message : String(error);
+        
+        // Emit job error event
+        this.emit('scheduler:job-error', { 
+          jobId: jobRef.id, 
+          name: jobRef.name, 
+          error: jobRef.lastError 
+        });
+      } finally {
+        this.runningJobs.delete(jobRef.id);
+        this.updateHealthStatus();
+      }
+    })();
+    
+    running = { job, startedAt: Date.now(), promise };
     
     this.runningJobs.set(job.id, running);
     

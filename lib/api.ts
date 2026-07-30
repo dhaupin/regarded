@@ -5,16 +5,23 @@
  * Used by the web app backend.
  */
 
-import type { Request, Response } from '@cloudflare/workers-types';
+import { Request, Response } from '@cloudflare/workers-types';
 
 // ============================================================================
 // Request/Response Types
 // ============================================================================
 
-export interface ApiRequest extends Request {
+export interface ApiRequest {
+  // Base request properties
+  url: string;
+  method: string;
+  headers: Headers;
+  body: any;
+  json: () => Promise<any>;
+  formData: () => Promise<FormData>;
+  text: () => Promise<string>;
   params?: Record<string, string>;
   query?: Record<string, string>;
-  body?: any;
   user?: {
     id: string;
     email: string;
@@ -294,14 +301,14 @@ export class Router {
  * Health check handler
  */
 export function healthCheck(): Handler {
-  return () => success({ status: 'ok', timestamp: Date.now() });
+  return () => Promise.resolve(success({ status: 'ok', timestamp: Date.now() }));
 }
 
 /**
  * Not found handler
  */
 export function notFound(): Handler {
-  return () => error('NOT_FOUND', 'Resource not found', 404);
+  return () => Promise.resolve(error('NOT_FOUND', 'Resource not found', 404));
 }
 
 // ============================================================================

@@ -217,7 +217,7 @@ export class NotifyManager extends EventEmitter<NotifyEvents> {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
       
       if (data.ok) {
         this.emit('notify:sent', { channel: 'telegram', message: payload.message, messageId: String(data.result.message_id) });
@@ -275,7 +275,7 @@ export class NotifyManager extends EventEmitter<NotifyEvents> {
         body: JSON.stringify({ embeds: [embed] }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
       
       if (response.ok) {
         this.emit('notify:sent', { channel: 'discord', message: payload.message, messageId: data.id });

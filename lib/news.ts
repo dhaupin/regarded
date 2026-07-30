@@ -6,7 +6,6 @@
  */
 
 import { EventEmitter } from './event';
-import { fetch } from './network';
 import { LRUCache } from './cache';
 import { RateLimiter } from './qos';
 import { createError, ErrorCode } from './error';

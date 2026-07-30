@@ -4,7 +4,7 @@
  * Validates strategies against historical data before allowing live trading.
  */
 
-import type { Candle, CandleInterval, PatternType } from './types';
+import type { Candle, CandleInterval, PatternType, PatternResult } from './types';
 import type { ExchangeConnector } from './types';
 import { calculateIndicator } from './indicators';
 import { detectPattern } from './patterns';
@@ -44,8 +44,8 @@ export interface StrategyAnalyzer {
     symbol: string,
     interval: CandleInterval,
     candles: Candle[],
-    indicators: Record<string, number>,
-    pattern?: PatternType
+    indicators: Record<string, number | number[] | undefined>,
+    pattern?: PatternResult
   ) => Promise<{ signal: 'buy' | 'sell' | 'hold'; strength: number; reason: string }>;
 }
 

@@ -7,16 +7,16 @@
  * import { createConnector, createRulesEngine, calculateIndicator } from './lib/regarded';
  */
 
-// Re-export types
-export * from './types';
+// Re-export types (explicit to avoid conflicts)
+export type { Position, Strategy, ApiResponse as RpcResponse } from './types';
 
-// Error handling
-export * from './error';
+// Error handling (explicit to avoid conflicts)
+export { RegardedError, ErrorCode, isOperationalError, createError as errors } from './error';
 
 // Security
 export * from './encrypt';
 export * from './audit';
-export * from './waf';
+export { ValidationResult as WafValidationResult } from './waf';
 
 // QoS / Circuit Breaker
 export * from './qos';
@@ -31,7 +31,7 @@ export * from './scheduler';
 export * from './auth';
 
 // Config
-export * from './config';
+export { ConfigManager } from './config';
 
 // Utils & Storage
 export * from './storage';
@@ -67,17 +67,14 @@ export * from './news';
 // Market Psychology
 export * from './psy';
 
-// Webhooks - External signal input & notifications
-export * from './webhooks';
-
-// Telegram - Bot notifications
-export * from './telegram';
-
 // Notify - Unified notification system
 export * from './notify';
 
 // Adapters - Notification adapters (telegram, discord, slack, webhook)
+// Also re-export webhook/telegram types for backwards compatibility
 export * from './adapters';
+export type { WebhookConfig, WebhookEvent, WebhookFilter, WebhookMessage } from './adapters/webhook';
+export type { TelegramMessage, TelegramUpdate, TelegramChat, TelegramUser, TelegramCallbackQuery, SendMessageOptions, InlineKeyboardButton, InlineKeyboardMarkup } from './adapters/telegram';
 
 // Portfolio / Position Management
 export * from './portfolio';

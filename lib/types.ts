@@ -6,6 +6,18 @@
  */
 
 // ============================================================================
+// Cloudflare Types
+// ============================================================================
+
+// Cloudflare KV Namespace (for compatibility)
+export interface KVNamespace {
+  get(key: string, options?: any): Promise<string | null>;
+  put(key: string, value: string, options?: any): Promise<void>;
+  delete(key: string, options?: any): Promise<void>;
+  list(options?: any): Promise<{ keys: Array<{ name: string }> }>;
+}
+
+// ============================================================================
 // User & Auth Types
 // ============================================================================
 
@@ -522,6 +534,8 @@ export interface ExchangeConnector {
   supportsPaperTrading(): boolean;
   supportedIntervals(): CandleInterval[];
   supportedSymbols(): string[];
+  setPaperMode(enabled: boolean): void;
+  isPaperMode(): boolean;
 }
 
 // ============================================================================

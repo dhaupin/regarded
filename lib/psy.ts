@@ -9,7 +9,7 @@
 import { createError, ErrorCode } from './error';
 import { logAuditEvent } from './audit';
 import type { Candle } from './types';
-import { calculateIndicator, IndicatorType } from './indicators';
+import { calculateIndicator } from './indicators';
 import { type Storage, createJSONStorage } from './storage';
 
 // ============================================================================
@@ -295,7 +295,7 @@ export class MarketPsychology {
 
     // Calculate RSI
     const rsi = calculateIndicator(
-      IndicatorType.RSI,
+      'rsi',
       candles,
       { period: 14 }
     );
@@ -309,15 +309,19 @@ export class MarketPsychology {
       };
     }
 
+    // Extract numeric value (RSI returns single number)
+    const rsiValue = Array.isArray(rsi.value) ? rsi.value[0] : rsi.value;
+    const rsiFormatted = rsiValue.toFixed(1);
+
     // Check for overbought (exhaustion to upside)
-    if (rsi.value > rsiOverbought) {
+    if (rsiValue > rsiOverbought) {
       const result: PsychologyResult = {
         allowed: false,
         signal: 'momentum_exhaustion',
-        reason: `Momentum exhaustion: RSI overbought at ${rsi.value.toFixed(1)} (threshold: ${rsiOverbought})`,
-        confidence: (rsi.value - rsiOverbought) / 30,
+        reason: `Momentum exhaustion: RSI overbought at ${rsiFormatted} (threshold: ${rsiOverbought})`,
+        confidence: (rsiValue - rsiOverbought) / 30,
         details: {
-          rsi: rsi.value,
+          rsi: rsiValue,
           overboughtThreshold: rsiOverbought,
           direction: 'down',
         },
@@ -331,14 +335,14 @@ export class MarketPsychology {
     }
 
     // Check for oversold (exhaustion to downside)
-    if (rsi.value < rsiOversold) {
+    if (rsiValue < rsiOversold) {
       const result: PsychologyResult = {
         allowed: false,
         signal: 'momentum_exhaustion',
-        reason: `Momentum exhaustion: RSI oversold at ${rsi.value.toFixed(1)} (threshold: ${rsiOversold})`,
-        confidence: (rsiOversold - rsi.value) / 30,
+        reason: `Momentum exhaustion: RSI oversold at ${rsiFormatted} (threshold: ${rsiOversold})`,
+        confidence: (rsiOversold - rsiValue) / 30,
         details: {
-          rsi: rsi.value,
+          rsi: rsiValue,
           oversoldThreshold: rsiOversold,
           direction: 'up',
         },
@@ -354,7 +358,7 @@ export class MarketPsychology {
     return {
       allowed: true,
       signal: 'neutral',
-      reason: `RSI at ${rsi.value.toFixed(1)} - neutral zone`,
+      reason: `RSI at ${rsiFormatted} - neutral zone`,
       confidence: 0.2,
     };
   }
