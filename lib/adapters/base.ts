@@ -5,8 +5,8 @@
  * Uses: event, error, utils
  */
 
-import { EventEmitter, type Emitter } from '../event';
-import { createError, ErrorCode } from '../error';
+import { EventEmitter } from '../event';
+import { createError, ErrorCode, errors } from '../error';
 import { logAuditEvent, initAuditLogger, type AuditLoggerConfig } from '../audit';
 
 // ============================================================================
@@ -61,7 +61,7 @@ export interface AdapterEvents {
 // Base Adapter
 // ============================================================================
 
-export abstract class BaseAdapter extends Emitter<AdapterEvents> {
+export abstract class BaseAdapter extends EventEmitter<AdapterEvents> {
   abstract readonly name: string;
   abstract readonly type: AdapterType;
   protected connected: boolean = false;

@@ -481,8 +481,8 @@ export class QoSManager extends EventEmitter<QoSEvents> {
     if (!consumed) {
       this.emit('qos:rate-limited', { 
         key: name, 
-        limit: maxTokens ?? limiter.maxTokens, 
-        current: limiter.availableTokens 
+        limit: maxTokens ?? (limiter as any).maxTokens, 
+        current: limiter.getAvailableTokens() 
       });
     }
     

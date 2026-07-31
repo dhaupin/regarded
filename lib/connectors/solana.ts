@@ -5,7 +5,7 @@
  * Uses: base, error, audit, utils
  */
 
-import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../../types';
+import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../types';
 import { BaseConnector } from './base';
 import { createError, ErrorCode } from '../error';
 import { logAuditEvent } from '../audit';

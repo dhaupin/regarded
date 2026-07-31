@@ -4,10 +4,10 @@
  * Validates strategies against historical data before allowing live trading.
  */
 
-import type { Candle, CandleInterval } from './types';
+import type { Candle, CandleInterval, PatternType, PatternResult } from './types';
 import type { ExchangeConnector } from './types';
-import { calculateIndicator, IndicatorType } from './indicators';
-import { detectPattern, PatternType } from './patterns';
+import { calculateIndicator } from './indicators';
+import { detectPattern } from './patterns';
 
 export interface BacktestConfig {
   /** Minimum backtest periods required */
@@ -44,8 +44,8 @@ export interface StrategyAnalyzer {
     symbol: string,
     interval: CandleInterval,
     candles: Candle[],
-    indicators: Record<string, number>,
-    pattern?: PatternType
+    indicators: Record<string, number | number[] | undefined>,
+    pattern?: PatternResult
   ) => Promise<{ signal: 'buy' | 'sell' | 'hold'; strength: number; reason: string }>;
 }
 
@@ -106,25 +106,25 @@ export class BacktestValidator {
       const currentCandle = candles[i];
       
       // Calculate indicators
-      const indicators: Record<string, number> = {};
+      const indicators: Record<string, number | number[] | undefined> = {};
       try {
-        const rsi = calculateIndicator(historicalCandles, IndicatorType.RSI, { period: 14 });
-        indicators.rsi = rsi.value;
+        const rsi = calculateIndicator('rsi', historicalCandles, { period: 14 });
+        indicators.rsi = rsi?.value;
         
-        const macd = calculateIndicator(historicalCandles, IndicatorType.MACD, { fast: 12, slow: 26, signal: 9 });
-        indicators.macd = macd.value;
-        indicators.macdSignal = macd.metadata?.signal;
+        const macd = calculateIndicator('macd', historicalCandles, { fast: 12, slow: 26, signal: 9 });
+        indicators.macd = macd?.value;
+        indicators.macdSignal = macd?.metadata?.signal;
         
-        const bb = calculateIndicator(historicalCandles, IndicatorType.BOLLINGER_BANDS, { period: 20, stdDev: 2 });
-        indicators.bbUpper = bb.metadata?.upper;
-        indicators.bbMiddle = bb.metadata?.middle;
-        indicators.bbLower = bb.metadata?.lower;
+        const bb = calculateIndicator('bollinger', historicalCandles, { period: 20, stdDev: 2 });
+        indicators.bbUpper = bb?.metadata?.upper;
+        indicators.bbMiddle = bb?.metadata?.middle;
+        indicators.bbLower = bb?.metadata?.lower;
       } catch (e) {
         // Skip if indicators fail
         continue;
       }
 
-      const pattern = detectPattern(historicalCandles);
+      const pattern = detectPattern('humps', historicalCandles);
       
       try {
         const result = await strategy.analyze(symbol, interval, historicalCandles, indicators, pattern);

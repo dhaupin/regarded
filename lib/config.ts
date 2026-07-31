@@ -6,7 +6,7 @@
  */
 
 import { EventEmitter } from './event';
-import type { GlobalConfig, UserConfig, StrategyConfig, SecretsCategory, SecretsMetadata, UserPreferences } from './types';
+import type { GlobalConfig, UserConfig, StrategyConfig, SecretsCategory, SecretsMetadata, UserPreferences, KVNamespace } from './types';
 import { encrypt, decrypt, generateToken } from './encrypt';
 import { logAuditEvent } from './audit';
 
@@ -33,9 +33,9 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
  * Config Manager
  */
 export class ConfigManager extends EventEmitter<ConfigEvents> {
-  private kv: KVNamespace;
+  private kv: any; // KVNamespace from @cloudflare/workers-types
   
-  constructor(kv: KVNamespace) {
+  constructor(kv: any) {
     super();
     this.kv = kv;
   }

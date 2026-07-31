@@ -5,8 +5,8 @@
  * Uses: event, error, utils
  */
 
-import { EventEmitter, type Emitter } from './event';
-import { createError, ErrorCode } from './error';
+import { EventEmitter } from './event';
+import { createError, ErrorCode, errors } from './error';
 
 // ============================================================================
 // Types
@@ -87,7 +87,7 @@ export interface NotifyEvents {
 // Notify Manager
 // ============================================================================
 
-export class NotifyManager extends Emitter<NotifyEvents> {
+export class NotifyManager extends EventEmitter<NotifyEvents> {
   private channels = new Map<NotificationChannel, ChannelConfig>();
   private telegram?: TelegramConfig;
   private discord?: DiscordConfig;
@@ -217,7 +217,7 @@ export class NotifyManager extends Emitter<NotifyEvents> {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
       
       if (data.ok) {
         this.emit('notify:sent', { channel: 'telegram', message: payload.message, messageId: String(data.result.message_id) });
@@ -275,7 +275,7 @@ export class NotifyManager extends Emitter<NotifyEvents> {
         body: JSON.stringify({ embeds: [embed] }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
       
       if (response.ok) {
         this.emit('notify:sent', { channel: 'discord', message: payload.message, messageId: data.id });

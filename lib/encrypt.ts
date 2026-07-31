@@ -34,7 +34,7 @@ export function fromBase64(base64: string): Uint8Array {
 /**
  * Derive key from secret
  */
-export async function deriveKey(userSecret: string, salt: Uint8Array): Promise<CryptoKey> {
+export async function deriveKey(userSecret: string, salt: Uint8Array): Promise<any> { // CryptoKey
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     'raw', encoder.encode(userSecret), 'PBKDF2', false, ['deriveBits', 'deriveKey']
@@ -54,7 +54,7 @@ export async function encrypt(data: string, userSecret: string): Promise<Encrypt
   const encoder = new TextEncoder();
   
   const ciphertext = await crypto.subtle.encrypt(
-    { name: ALGORITHM, iv, authTagLen: AUTH_TAG_LENGTH * 8 }, key, encoder.encode(data)
+    { name: ALGORITHM, iv, authTagLen: AUTH_TAG_LENGTH * 8 } as any, key, encoder.encode(data)
   );
   
   const ciphertextWithTag = new Uint8Array(ciphertext);
@@ -93,7 +93,7 @@ export async function decrypt(encrypted: EncryptedSecrets, userSecret: string): 
   combined.set(authTag, ciphertext.length);
   
   const plaintext = await crypto.subtle.decrypt(
-    { name: ALGORITHM, iv, authTagLen: AUTH_TAG_LENGTH * 8 }, key, combined
+    { name: ALGORITHM, iv, authTagLen: AUTH_TAG_LENGTH * 8 } as any, key, combined
   );
   return new TextDecoder().decode(plaintext);
 }

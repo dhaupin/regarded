@@ -14,7 +14,7 @@ import type {
   OrderResult,
   Trade,
   EncryptedSecrets,
-} from '../../types';
+} from '../types';
 import { EventEmitter } from '../event';
 import { 
   RulesValidator, 
@@ -70,7 +70,7 @@ export abstract class BaseConnector extends EventEmitter<ConnectorEvents> implem
     let availableBalance = 0;
     for (const bal of balances) {
       if (bal.asset === quote) {
-        availableBalance = bal.available;
+        availableBalance = bal.free;
       }
     }
     
@@ -84,7 +84,7 @@ export abstract class BaseConnector extends EventEmitter<ConnectorEvents> implem
       positionSize: 0, // Would need position tracking
       dailyTradeCount: this.dailyTradeCount,
       dailyLoss: this.dailyLoss,
-      portfolioValue: balances.reduce((sum, b) => sum + (b.available + b.locked), 0),
+      portfolioValue: balances.reduce((sum, b) => sum + (b.free + b.locked), 0),
     };
     
     return this.validator.validatePreTrade(context);
@@ -109,12 +109,12 @@ export abstract class BaseConnector extends EventEmitter<ConnectorEvents> implem
       order,
       exchange: this.exchange,
       connectorName: this.name,
-      availableBalance: balances[0]?.available ?? 0,
+      availableBalance: balances[0]?.free ?? 0,
       currentPrice,
       positionSize: 0,
       dailyTradeCount: this.dailyTradeCount,
       dailyLoss: this.dailyLoss,
-      portfolioValue: balances.reduce((sum, b) => sum + (b.available + b.locked), 0),
+      portfolioValue: balances.reduce((sum, b) => sum + (b.free + b.locked), 0),
       slippage,
       filledPrice,
     };

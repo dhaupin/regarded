@@ -28,7 +28,7 @@ export class HumpsPattern extends BasePattern {
   detect(candles: Candle[], options?: PatternOptions): PatternResult {
     const count = options?.count ?? 3;
     const direction = options?.direction ?? 'up';
-    const minHeight = options?.minHeight ?? 0.5;
+    const minHeight = options?.min_height ?? 0.5;
     const lookback = options?.lookback ?? 20;
     
     const prices = this.getValues(candles);
@@ -97,10 +97,10 @@ export class DivergencePattern extends BasePattern {
     const currentPrice = recentPrices[recentPrices.length - 1];
     const pricePosition = (currentPrice - lowestLow) / (highestHigh - lowestLow);
     
-    if (direction === 'bullish' && pricePosition < 0.3 && highestIndex > lowestIndex) {
+    if (direction === 'up' && pricePosition < 0.3 && highestIndex > lowestIndex) {
       return { detected: true, confidence: 0.7, direction: 'up', start_index: lowestIndex };
     }
-    if (direction === 'bearish' && pricePosition > 0.7 && lowestIndex > highestIndex) {
+    if (direction === 'down' && pricePosition > 0.7 && lowestIndex > highestIndex) {
       return { detected: true, confidence: 0.7, direction: 'down', start_index: highestIndex };
     }
     

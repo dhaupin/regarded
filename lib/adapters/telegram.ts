@@ -7,8 +7,66 @@
 
 import { BaseAdapter, type AdapterConfig, type SendOptions, type AdapterResult, type AdapterStatus, registerAdapter } from './base';
 import { createNetwork } from '../network';
-import { createError, ErrorCode } from '../error';
+import { createError, ErrorCode, errors } from '../error';
 import { safeJsonParse } from '../utils';
+
+// ============================================================================
+// Types (from lib/telegram.ts)
+// ============================================================================
+
+export interface TelegramUpdate {
+  update_id: number;
+  message?: TelegramMessage;
+  edited_message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
+}
+
+export interface TelegramMessage {
+  message_id: number;
+  chat: TelegramChat;
+  from?: TelegramUser;
+  text?: string;
+  date: number;
+}
+
+export interface TelegramChat {
+  id: number;
+  type: 'private' | 'group' | 'supergroup' | 'channel';
+  title?: string;
+  username?: string;
+}
+
+export interface TelegramUser {
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+}
+
+export interface TelegramCallbackQuery {
+  id: string;
+  from: TelegramUser;
+  message?: TelegramMessage;
+  data?: string;
+}
+
+export interface SendMessageOptions {
+  parse_mode?: 'Markdown' | 'HTML';
+  reply_markup?: InlineKeyboardMarkup;
+  reply_to?: number;
+  disable_web_page_preview?: boolean;
+}
+
+export interface InlineKeyboardButton {
+  text: string;
+  url?: string;
+  callback_data?: string;
+}
+
+export interface InlineKeyboardMarkup {
+  inline_keyboard: InlineKeyboardButton[][];
+}
 
 export interface TelegramAdapterConfig extends AdapterConfig {
   /** Bot token from @BotFather */
@@ -64,7 +122,7 @@ export class TelegramAdapter extends BaseAdapter {
   private getApiBase(): string {
     if (!this.botToken) {
       throw createError({
-        code: ErrorCode.CONFIGURATION_ERROR,
+        code: ErrorCode.VALIDATION_FAILED,
         message: 'Telegram bot token not configured',
       });
     }
@@ -82,14 +140,14 @@ export class TelegramAdapter extends BaseAdapter {
     });
 
     if (!result.ok) {
-      const error = safeJsonParse(result.data as string) as any;
+      const error = safeJsonParse(result.data as string, null) as any;
       throw createError({
-        code: ErrorCode.API_RESPONSE_ERROR,
+        code: ErrorCode.EXCHANGE_ERROR,
         message: `Telegram API error: ${error?.description || result.statusText}`,
       });
     }
 
-    const data = safeJsonParse(result.data as string) as any;
+    const data = safeJsonParse(result.data as string, null) as any;
     return data.result;
   }
 

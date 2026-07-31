@@ -8,6 +8,40 @@
 import { BaseAdapter, type AdapterConfig, type SendOptions, type AdapterResult, type AdapterStatus } from './base';
 import { createNetwork } from '../network';
 import { createError, ErrorCode } from '../error';
+import { safeJsonParse } from '../utils';
+
+// ============================================================================
+// Types (from lib/webhooks.ts)
+// ============================================================================
+
+export interface WebhookConfig {
+  name: string;
+  source: string;
+  eventKeyExpr?: string;
+  signatureHeader?: string;
+  secret?: string;
+  enabled?: boolean;
+}
+
+export interface WebhookFilter {
+  eventPattern: string;
+  filterExpr: string;
+}
+
+export interface WebhookEvent {
+  source: string;
+  event: string;
+  payload: any;
+  timestamp: number;
+}
+
+export interface WebhookMessage {
+  received: boolean;
+  event?: string;
+  source?: string;
+  filtered?: boolean;
+  error?: string;
+}
 
 export interface WebhookAdapterConfig extends AdapterConfig {
   /** Webhook URL */

@@ -14,7 +14,7 @@ export { AuditEvent, AuditEventType, RiskLevel };
 // ============================================================================
 
 export interface AuditLoggerConfig {
-  kvNamespace: KVNamespace;
+  kvNamespace: any; // KVNamespace from @cloudflare/workers-types
   environment: 'development' | 'production';
 }
 

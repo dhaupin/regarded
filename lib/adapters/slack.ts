@@ -7,7 +7,7 @@
 
 import { BaseAdapter, type AdapterConfig, type SendOptions, type AdapterResult, type AdapterStatus, registerAdapter } from './base';
 import { createNetwork } from '../network';
-import { createError, ErrorCode } from '../error';
+import { createError, ErrorCode, errors } from '../error';
 
 export interface SlackAdapterConfig extends AdapterConfig {
   /** Bot token (for bot API) */
@@ -51,7 +51,7 @@ export class SlackAdapter extends BaseAdapter {
   async send(message: string, options?: SendOptions): Promise<AdapterResult> {
     // Use webhook if available
     if (this.webhookUrl) {
-      return this.sendViaWebhook(message);
+      return this.sendViaWebhook(message, options);
     }
 
     // Fall back to bot API
@@ -65,7 +65,7 @@ export class SlackAdapter extends BaseAdapter {
   /**
    * Send via incoming webhook
    */
-  private async sendViaWebhook(message: string): Promise<AdapterResult> {
+  private async sendViaWebhook(message: string, options?: SendOptions): Promise<AdapterResult> {
     const destination = this.defaultDestination || 'webhook';
     
     try {
@@ -133,7 +133,7 @@ export class SlackAdapter extends BaseAdapter {
         },
       });
 
-      const data = await response.json();
+      const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
       
       if (data.ok) {
         this.emit('adapter:message-sent', {
@@ -169,10 +169,10 @@ export class SlackAdapter extends BaseAdapter {
     }
 
     try {
-      const response = await this.network.get('https://slack.com/api/auth.test', {
+      const response = await this.network.get('https://slack.com/api/auth.test', undefined, {
         headers: { 'Authorization': `Bearer ${this.botToken}` },
       });
-      const data = await response.json();
+      const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
       this.connected = data.ok;
       return data.ok;
     } catch (e) {
