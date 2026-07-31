@@ -35,31 +35,54 @@ npm run lint
 ## Architecture
 
 ```
-lib/
-├── regarded.ts        # Main entry point
-├── types.ts           # All TypeScript interfaces
-├── error.ts           # Error codes, factory, utilities
-├── encrypt.ts        # AES-256-GCM encryption
-├── audit.ts          # Audit logging
-├── waf.ts            # Rate limiting, IP blocking
-├── qos.ts            # Circuit breaker, rate limiter
-├── network.ts        # HTTP client with retry
-├── scheduler.ts      # Cron scheduler
-├── auth.ts           # JWT, OAuth, sessions
-├── config.ts         # Config registry, secrets
-├── storage.ts        # KV cache
-├── cache.ts          # LRU cache with TTL
-├── event.ts          # Event emitter
-├── api.ts            # HTTP handlers
-├── indicators.ts     # RSI, KDJ, Bollinger, MACD
-├── patterns.ts       # Pattern detection
-├── rules.ts          # Rules engine
-├── connectors/       # Exchange connectors
+lib/                     # Core trading engine
+├── regarded.ts          # Main entry point
+├── types.ts            # All TypeScript interfaces
+├── error.ts            # Error codes, factory, utilities
+├── encrypt.ts          # AES-256-GCM encryption
+├── audit.ts            # Audit logging
+├── waf.ts              # Rate limiting, IP blocking
+├── qos.ts              # Circuit breaker, rate limiter
+├── network.ts          # HTTP client with retry
+├── scheduler.ts        # Cron scheduler
+├── auth.ts             # JWT, OAuth, sessions
+├── config.ts           # Config registry, secrets
+├── storage.ts          # KV cache
+├── cache.ts            # LRU cache with TTL
+├── event.ts            # Event emitter
+├── api.ts              # HTTP handlers
+├── indicators.ts       # RSI, KDJ, Bollinger, MACD
+├── patterns.ts         # Pattern detection
+├── rules.ts            # Rules engine
+├── notify.ts           # Canonical notification handler
+├── runner.ts           # Trading agent runner
+├── portfolio.ts        # Position & portfolio management
+├── guard.ts           # Risk guardrails
+├── psy.ts             # Market psychology analysis
+├── connectors/        # Exchange connectors
 │   ├── base.ts       # Base connector class
 │   ├── kraken.ts     # Kraken exchange
 │   ├── solana.ts     # Solana wallet
 │   └── jupiter.ts    # Jupiter aggregator
-└── runner.ts         # Trading agent runner
+└── adapters/         # Notification adapters
+    ├── base.ts       # Base adapter class, registry
+    ├── telegram.ts   # Telegram adapter
+    ├── discord.ts   # Discord adapter
+    ├── slack.ts     # Slack adapter
+    └── webhook.ts   # Generic webhook adapter
+
+srv/                    # Cloudflare Workers server
+├── src/
+│   ├── index.ts      # Hono app entry
+│   ├── env.ts        # Environment types
+│   └── routes/       # API route handlers
+│       ├── auth.ts   # Auth endpoints
+│       ├── api.ts    # Main API
+│       └── webhooks.ts # Webhook handlers
+├── migrations/       # D2 schema migrations
+└── wrangler.toml    # Workers config
+
+app/                    # Frontend placeholder (Vite/React)
 ```
 
 ## Example Usage

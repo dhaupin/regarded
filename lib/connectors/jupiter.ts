@@ -7,7 +7,7 @@
  */
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../types';
-import { BaseConnector } from './base';
+import { BaseConnector, type ConnectorConfig } from './base';
 import { createError, ErrorCode } from '../error';
 import { logAuditEvent } from '../audit';
 
@@ -15,8 +15,15 @@ export class JupiterConnector extends BaseConnector {
   name = 'Jupiter';
   exchange = 'jupiter';
   
+  constructor(config: ConnectorConfig = {}) {
+    super(config);
+  }
+  
   async connect(credentials: EncryptedSecrets): Promise<boolean> {
     this.connected = true;
+    
+    // Emit connected event
+    this.emit('connector:connected', { exchange: this.exchange, name: this.name });
     
     // Audit log
     logAuditEvent('connector_connected' as any, this.exchange, {
@@ -28,6 +35,9 @@ export class JupiterConnector extends BaseConnector {
   
   async disconnect(): Promise<void> {
     this.connected = false;
+    
+    // Emit disconnected event
+    this.emit('connector:disconnected', { exchange: this.exchange, name: this.name });
     
     // Audit log
     logAuditEvent('connector_disconnected' as any, this.exchange, {

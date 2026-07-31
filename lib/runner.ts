@@ -32,6 +32,8 @@ import { createMarketPsychology, PsychologyConfig, PsychologyResult, NewsAnalysi
 import { Portfolio, createPortfolio, type Position } from './portfolio';
 import { Guard, createGuard, GuardConfig, GuardResult, GuardReasonCode, type TradingWindow, type TradingSchedule, type NewsBlackoutPeriod } from './guard';
 import { type Storage } from './storage';
+import { type NotifyManager, type TelegramConfig, type DiscordConfig, type SlackConfig, type WebhookConfig, createNotifyManager } from './notify';
+import { getAdapter, registerAdapter, type BaseAdapter } from './adapters';
 
 // ============================================================================
 // Types
@@ -85,6 +87,29 @@ export interface AgentConfig {
   };
   /** Storage for state persistence (optional) */
   storage?: Storage;
+  /** Notification adapters configuration (optional) */
+  notifications?: {
+    /** Enable notifications */
+    enabled?: boolean;
+    /** Custom notify manager instance */
+    manager?: NotifyManager;
+    /** Telegram configuration */
+    telegram?: TelegramConfig;
+    /** Discord configuration */
+    discord?: DiscordConfig;
+    /** Slack configuration */
+    slack?: SlackConfig;
+    /** Webhook configurations */
+    webhooks?: Record<string, WebhookConfig>;
+    /** Notify on trade execution */
+    onTrade?: boolean;
+    /** Notify on position changes */
+    onPosition?: boolean;
+    /** Notify on guard blocks */
+    onGuardBlock?: boolean;
+    /** Notify on errors */
+    onError?: boolean;
+  };
 }
 
 export interface Signal {
@@ -196,6 +221,8 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
   private backtest: import('./backtest').BacktestValidator | null = null;
   private news: import('./news').NewsService | null = null;
   private psychology: import('./psy').MarketPsychology | null = null;
+  private notifyManager: NotifyManager | null = null;
+  private notifyConfig: AgentConfig['notifications'] | null = null;
   
   constructor(config: AgentConfig) {
     super();
@@ -255,6 +282,37 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
       }
     }
     
+    // Initialize notifications if configured
+    if (config.notifications?.enabled !== false) {
+      this.notifyConfig = config.notifications || {};
+      
+      // Use custom manager or create one
+      if (config.notifications?.manager) {
+        this.notifyManager = config.notifications.manager;
+      } else {
+        this.notifyManager = createNotifyManager();
+        
+        // Register adapters
+        if (config.notifications?.telegram) {
+          this.notifyManager!.setTelegram(config.notifications.telegram);
+        }
+        if (config.notifications?.discord) {
+          this.notifyManager!.setDiscord(config.notifications.discord);
+        }
+        if (config.notifications?.slack) {
+          this.notifyManager!.setSlack(config.notifications.slack);
+        }
+        if (config.notifications?.webhooks) {
+          for (const [name, webhookConfig] of Object.entries(config.notifications.webhooks)) {
+            this.notifyManager!.registerWebhook(name, webhookConfig);
+          }
+        }
+      }
+      
+      // Set up notification event listeners
+      this.setupNotificationListeners();
+    }
+    
     // Set up circuit breaker event handlers
     this.qos.on('qos:circuit-open', ({ breaker }) => {
       this.guard.openCircuit();
@@ -279,6 +337,65 @@ export class TradingAgent extends EventEmitter<RunnerEvents> {
    */
   private getStorageKey(prefix: string): string {
     return `agent:${prefix}`;
+  }
+
+  /**
+   * Set up notification event listeners
+   */
+  private setupNotificationListeners(): void {
+    if (!this.notifyManager || !this.notifyConfig) return;
+    
+    const cfg = this.notifyConfig;
+    
+    // Notify on trade execution
+    if (cfg.onTrade) {
+      this.on('order:filled', async ({ execution }) => {
+        const msg = `Trade ${execution.signal.side.toUpperCase()} ${execution.signal.symbol} @ ${execution.result?.price}\nP/L: ${execution.result ? (execution.result.price - execution.signal.price).toFixed(2) : 'N/A'}`;
+        await this.notifyManager!.notify({ message: msg, channel: 'telegram' }).catch(() => {});
+      });
+    }
+    
+    // Notify on position changes
+    if (cfg.onPosition) {
+      this.on('position:opened', async ({ position }) => {
+        const msg = `Opened ${position.side} ${position.symbol} @ ${position.entryPrice}`;
+        await this.notifyManager!.notify({ message: msg, channel: 'telegram' }).catch(() => {});
+      });
+      this.on('position:closed', async ({ position, pnl }) => {
+        const msg = `Closed ${position.symbol} | P/L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`;
+        await this.notifyManager!.notify({ message: msg, channel: 'telegram' }).catch(() => {});
+      });
+    }
+    
+    // Notify on guard blocks
+    if (cfg.onGuardBlock) {
+      this.on('guard:blocked', async ({ guardResult }) => {
+        const msg = `Guard blocked: ${guardResult.reason}`;
+        await this.notifyManager!.notify({ message: msg, channel: 'telegram' }).catch(() => {});
+      });
+    }
+    
+    // Notify on errors
+    if (cfg.onError) {
+      this.on('agent:error', async ({ error }) => {
+        await this.notifyManager!.notify({ message: `Agent error: ${error}`, channel: 'telegram' }).catch(() => {});
+      });
+    }
+  }
+
+  /**
+   * Send a notification
+   */
+  async notify(payload: { title?: string; message: string; channel?: 'telegram' | 'discord' | 'slack' | 'webhook' }): Promise<void> {
+    if (!this.notifyManager) return;
+    await this.notifyManager.notify(payload).catch(() => {});
+  }
+
+  /**
+   * Get notify manager instance
+   */
+  getNotifyManager(): NotifyManager | null {
+    return this.notifyManager;
   }
 
   /**

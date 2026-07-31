@@ -7,7 +7,7 @@
  */
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../types';
-import { BaseConnector } from './base';
+import { BaseConnector, type ConnectorConfig } from './base';
 import { createError, ErrorCode } from '../error';
 import { logAuditEvent } from '../audit';
 import { generateId } from '../utils';
@@ -19,12 +19,19 @@ export class KrakenConnector extends BaseConnector {
   private apiSecret?: string;
   private baseUrl = 'https://api.kraken.com';
   
+  constructor(config: ConnectorConfig = {}) {
+    super(config);
+  }
+  
   async connect(credentials: EncryptedSecrets): Promise<boolean> {
     // In production, decrypt credentials first
     // const decrypted = await decrypt(credentials, userSecret);
     // const { apiKey, apiSecret } = JSON.parse(decrypted);
     
     this.connected = true;
+    
+    // Emit connected event
+    this.emit('connector:connected', { exchange: this.exchange, name: this.name });
     
     // Audit log
     logAuditEvent('connector_connected' as any, this.exchange, {
@@ -38,6 +45,9 @@ export class KrakenConnector extends BaseConnector {
     this.apiKey = undefined;
     this.apiSecret = undefined;
     this.connected = false;
+    
+    // Emit disconnected event
+    this.emit('connector:disconnected', { exchange: this.exchange, name: this.name });
     
     // Audit log
     logAuditEvent('connector_disconnected' as any, this.exchange, {

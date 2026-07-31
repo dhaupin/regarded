@@ -1,12 +1,22 @@
 /**
  * Notify - Unified Notification System
  *
- * Multi-channel notification system (Telegram, Discord, Slack, Webhook).
- * Uses: event, error, utils
+ * Canonical notification handler that uses adapters internally.
+ * Provides a simple API while leveraging the adapters system.
+ * Uses: event, adapters
  */
 
 import { EventEmitter } from './event';
-import { createError, ErrorCode, errors } from './error';
+import { 
+  registerAdapter, getAdapter, getAllAdapters, 
+  type BaseAdapter, type SendOptions, type AdapterType 
+} from './adapters';
+import { 
+  createTelegramAdapter, type TelegramAdapterConfig,
+  createDiscordAdapter, type DiscordAdapterConfig,
+  createSlackAdapter, type SlackAdapterConfig,
+  createWebhookAdapter, type WebhookAdapterConfig,
+} from './adapters';
 
 // ============================================================================
 // Types
@@ -21,6 +31,8 @@ export interface NotificationPayload {
   message: string;
   /** Channel to send to */
   channel?: NotificationChannel;
+  /** Adapter name (for named adapters) */
+  adapter?: string;
   /** Extra metadata */
   metadata?: Record<string, any>;
 }
@@ -32,55 +44,19 @@ export interface NotificationResult {
   error?: string;
 }
 
-export interface ChannelConfig {
-  /** Channel type */
-  type: NotificationChannel;
-  /** Whether channel is enabled */
-  enabled?: boolean;
-  /** Channel-specific config */
-  config: TelegramConfig | DiscordConfig | SlackConfig | WebhookConfig;
-}
-
-export interface TelegramConfig {
-  /** Bot token */
-  botToken?: string;
-  /** Default chat ID */
-  chatId?: string;
-}
-
-export interface DiscordConfig {
-  /** Bot token */
-  botToken?: string;
-  /** Channel ID */
-  channelId?: string;
-  /** Webhook URL (simpler option) */
-  webhookUrl?: string;
-}
-
-export interface SlackConfig {
-  /** Bot token */
-  botToken?: string;
-  /** Channel ID */
-  channelId?: string;
-  /** Incoming webhook URL */
-  webhookUrl?: string;
-}
-
-export interface WebhookConfig {
-  /** Webhook URL */
-  url: string;
-  /** Secret for signing */
-  secret?: string;
-}
+export interface TelegramConfig extends TelegramAdapterConfig {}
+export interface DiscordConfig extends DiscordAdapterConfig {}
+export interface SlackConfig extends SlackAdapterConfig {}
+export interface WebhookConfig extends WebhookAdapterConfig {}
 
 // ============================================================================
 // Event Types
 // ============================================================================
 
 export interface NotifyEvents {
-  'notify:sent': { channel: NotificationChannel; message: string; messageId?: string };
-  'notify:error': { channel: NotificationChannel; message: string; error: string };
-  'notify:channelregistered': { channel: NotificationChannel };
+  'notify:sent': { channel: NotificationChannel; message: string; messageId?: string; adapter?: string };
+  'notify:error': { channel: NotificationChannel; message: string; error: string; adapter?: string };
+  'notify:channelregistered': { channel: NotificationChannel; adapter: string };
 }
 
 // ============================================================================
@@ -88,102 +64,120 @@ export interface NotifyEvents {
 // ============================================================================
 
 export class NotifyManager extends EventEmitter<NotifyEvents> {
-  private channels = new Map<NotificationChannel, ChannelConfig>();
-  private telegram?: TelegramConfig;
-  private discord?: DiscordConfig;
-  private slack?: SlackConfig;
-  private webhooks: Map<string, WebhookConfig> = new Map();
+  private channelToAdapter = new Map<NotificationChannel, string>();
 
-  constructor(config?: {
-    telegram?: TelegramConfig;
-    discord?: DiscordConfig;
-    slack?: SlackConfig;
-  }) {
+  constructor() {
     super();
-    this.telegram = config?.telegram;
-    this.discord = config?.discord;
-    this.slack = config?.slack;
   }
 
   /**
-   * Register a notification channel
-   */
-  registerChannel(config: ChannelConfig): void {
-    this.channels.set(config.type, config);
-    this.emit('notify:channelregistered', { channel: config.type });
-  }
-
-  /**
-   * Register Telegram config
+   * Register Telegram adapter
    */
   setTelegram(config: TelegramConfig): void {
-    this.telegram = config;
-    this.registerChannel({ type: 'telegram', enabled: true, config });
+    const adapter = createTelegramAdapter(config);
+    registerAdapter('telegram', adapter);
+    this.channelToAdapter.set('telegram', 'telegram');
+    this.emit('notify:channelregistered', { channel: 'telegram', adapter: 'telegram' });
   }
 
   /**
-   * Register Discord config
+   * Register Discord adapter
    */
   setDiscord(config: DiscordConfig): void {
-    this.discord = config;
-    this.registerChannel({ type: 'discord', enabled: true, config });
+    const adapter = createDiscordAdapter(config);
+    registerAdapter('discord', adapter);
+    this.channelToAdapter.set('discord', 'discord');
+    this.emit('notify:channelregistered', { channel: 'discord', adapter: 'discord' });
   }
 
   /**
-   * Register Slack config
+   * Register Slack adapter
    */
   setSlack(config: SlackConfig): void {
-    this.slack = config;
-    this.registerChannel({ type: 'slack', enabled: true, config });
+    const adapter = createSlackAdapter(config);
+    registerAdapter('slack', adapter);
+    this.channelToAdapter.set('slack', 'slack');
+    this.emit('notify:channelregistered', { channel: 'slack', adapter: 'slack' });
   }
 
   /**
-   * Register a webhook
+   * Register webhook adapter
    */
   registerWebhook(name: string, config: WebhookConfig): void {
-    this.webhooks.set(name, config);
+    const adapter = createWebhookAdapter(name, config);
+    registerAdapter(name, adapter);
+    this.channelToAdapter.set('webhook', name);
+    this.emit('notify:channelregistered', { channel: 'webhook', adapter: name });
   }
 
   /**
-   * Get channel config
+   * Get registered adapter name for a channel
    */
-  getChannel(type: NotificationChannel): ChannelConfig | undefined {
-    return this.channels.get(type);
+  getAdapterName(channel: NotificationChannel): string | undefined {
+    return this.channelToAdapter.get(channel);
   }
 
   /**
    * List registered channels
    */
   listChannels(): NotificationChannel[] {
-    return Array.from(this.channels.keys());
+    return Array.from(this.channelToAdapter.keys());
   }
 
   /**
-   * Send notification
+   * Send notification using adapters
    */
   async notify(payload: NotificationPayload): Promise<NotificationResult> {
     const channel = payload.channel || 'telegram';
+    const adapterName = payload.adapter || this.channelToAdapter.get(channel);
     
+    if (!adapterName) {
+      return { success: false, channel, error: `No adapter registered for channel: ${channel}` };
+    }
+
+    const adapter = getAdapter(adapterName);
+    if (!adapter) {
+      return { success: false, channel, error: `Adapter '${adapterName}' not found` };
+    }
+
+    // Format message with title if present
+    const message = payload.title ? `*${payload.title}*\n${payload.message}` : payload.message;
+
     try {
-      switch (channel) {
-        case 'telegram':
-          return await this.sendTelegram(payload);
-        case 'discord':
-          return await this.sendDiscord(payload);
-        case 'slack':
-          return await this.sendSlack(payload);
-        case 'webhook':
-          return await this.sendWebhook(payload);
-        default:
-          return { success: false, channel, error: 'Unknown channel' };
+      const result = await adapter.send(message, {
+        destination: payload.adapter ? undefined : undefined,
+        metadata: payload.metadata,
+      });
+
+      if (result.success) {
+        this.emit('notify:sent', { 
+          channel, 
+          message: payload.message, 
+          messageId: result.messageId,
+          adapter: adapterName,
+        });
+      } else {
+        this.emit('notify:error', { 
+          channel, 
+          message: payload.message, 
+          error: result.error || 'Unknown error',
+          adapter: adapterName,
+        });
       }
+
+      return { 
+        success: result.success, 
+        channel, 
+        messageId: result.messageId, 
+        error: result.error 
+      };
     } catch (e: any) {
       return { success: false, channel, error: e.message };
     }
   }
 
   /**
-   * Send to multiple channels
+   * Send to all registered channels
    */
   async notifyAll(payload: NotificationPayload): Promise<NotificationResult[]> {
     const results: NotificationResult[] = [];
@@ -197,212 +191,48 @@ export class NotifyManager extends EventEmitter<NotifyEvents> {
   }
 
   /**
-   * Send Telegram notification
+   * Send to named adapter
    */
-  private async sendTelegram(payload: NotificationPayload): Promise<NotificationResult> {
-    if (!this.telegram?.botToken || !this.telegram?.chatId) {
-      return { success: false, channel: 'telegram', error: 'Telegram not configured' };
-    }
-
-    const text = payload.title ? `*${payload.title}*\n${payload.message}` : payload.message;
+  async sendToAdapter(adapterName: string, message: string): Promise<NotificationResult> {
+    const adapter = getAdapter(adapterName);
     
-    try {
-      const response = await fetch(`https://api.telegram.org/bot${this.telegram.botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: this.telegram.chatId,
-          text,
-          parse_mode: 'Markdown',
-        }),
-      });
-
-      const data = await response.json() as any;
-      
-      if (data.ok) {
-        this.emit('notify:sent', { channel: 'telegram', message: payload.message, messageId: String(data.result.message_id) });
-        return { success: true, channel: 'telegram', messageId: String(data.result.message_id) };
-      } else {
-        return { success: false, channel: 'telegram', error: data.description };
-      }
-    } catch (e: any) {
-      return { success: false, channel: 'telegram', error: e.message };
-    }
-  }
-
-  /**
-   * Send Discord notification
-   */
-  private async sendDiscord(payload: NotificationPayload): Promise<NotificationResult> {
-    const embed: any = {
-      title: payload.title,
-      description: payload.message,
-      timestamp: new Date().toISOString(),
-      color: 0x5865F2, // Discord blurple
-    };
-
-    // Use webhook if available, otherwise bot API
-    if (this.discord?.webhookUrl) {
-      try {
-        const response = await fetch(this.discord.webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ embeds: [embed] }),
-        });
-
-        if (response.ok) {
-          this.emit('notify:sent', { channel: 'discord', message: payload.message });
-          return { success: true, channel: 'discord' };
-        } else {
-          return { success: false, channel: 'discord', error: 'Webhook failed' };
-        }
-      } catch (e: any) {
-        return { success: false, channel: 'discord', error: e.message };
-      }
-    }
-
-    if (!this.discord?.botToken || !this.discord?.channelId) {
-      return { success: false, channel: 'discord', error: 'Discord not configured' };
+    if (!adapter) {
+      return { success: false, channel: 'telegram', error: `Adapter '${adapterName}' not found` };
     }
 
     try {
-      const response = await fetch(`https://discord.com/api/v10/channels/${this.discord.channelId}/messages`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bot ${this.discord.botToken}`,
-        },
-        body: JSON.stringify({ embeds: [embed] }),
-      });
-
-      const data = await response.json() as any;
-      
-      if (response.ok) {
-        this.emit('notify:sent', { channel: 'discord', message: payload.message, messageId: data.id });
-        return { success: true, channel: 'discord', messageId: data.id };
-      } else {
-        return { success: false, channel: 'discord', error: data.message || 'Failed' };
-      }
-    } catch (e: any) {
-      return { success: false, channel: 'discord', error: e.message };
-    }
-  }
-
-  /**
-   * Send Slack notification
-   */
-  private async sendSlack(payload: NotificationPayload): Promise<NotificationResult> {
-    // Use webhook if available
-    if (this.slack?.webhookUrl) {
-      try {
-        const blocks: any[] = [];
-        
-        if (payload.title) {
-          blocks.push({
-            type: 'header',
-            text: { type: 'plain_text', text: payload.title },
-          });
-        }
-        
-        blocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: payload.message },
-        });
-
-        const response = await fetch(this.slack.webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ blocks }),
-        });
-
-        if (response.ok) {
-          this.emit('notify:sent', { channel: 'slack', message: payload.message });
-          return { success: true, channel: 'slack' };
-        } else {
-          return { success: false, channel: 'slack', error: 'Webhook failed' };
-        }
-      } catch (e: any) {
-        return { success: false, channel: 'slack', error: e.message };
-      }
-    }
-
-    if (!this.slack?.botToken || !this.slack?.channelId) {
-      return { success: false, channel: 'slack', error: 'Slack not configured' };
-    }
-
-    // Bot API method (more complex, basic implementation)
-    return { success: false, channel: 'slack', error: 'Bot API not implemented, use webhook' };
-  }
-
-  /**
-   * Send webhook notification
-   */
-  private async sendWebhook(payload: NotificationPayload): Promise<NotificationResult> {
-    // Find first configured webhook
-    const webhook = this.webhooks.values().next().value;
-    
-    if (!webhook) {
-      return { success: false, channel: 'webhook', error: 'No webhooks configured' };
-    }
-
-    try {
-      const body: any = {
-        title: payload.title,
-        message: payload.message,
-        timestamp: new Date().toISOString(),
-        metadata: payload.metadata,
+      const result = await adapter.send(message);
+      return { 
+        success: result.success, 
+        channel: adapter.type,
+        messageId: result.messageId, 
+        error: result.error 
       };
-
-      // Add signature if secret is configured
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      
-      const response = await fetch(webhook.url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-
-      if (response.ok) {
-        this.emit('notify:sent', { channel: 'webhook', message: payload.message });
-        return { success: true, channel: 'webhook' };
-      } else {
-        return { success: false, channel: 'webhook', error: `HTTP ${response.status}` };
-      }
     } catch (e: any) {
-      return { success: false, channel: 'webhook', error: e.message };
+      return { success: false, channel: adapter.type, error: e.message };
     }
   }
 
   /**
-   * Send to a named webhook
+   * Send to named webhook (legacy function, use sendToAdapter instead)
    */
   async sendToWebhook(name: string, payload: NotificationPayload): Promise<NotificationResult> {
-    const webhook = this.webhooks.get(name);
+    const adapter = getAdapter(name);
     
-    if (!webhook) {
-      return { success: false, channel: 'webhook', error: `Webhook '${name}' not found` };
+    if (!adapter) {
+      return { success: false, channel: 'webhook', error: `Webhook adapter '${name}' not found` };
     }
 
+    const message = payload.title ? `*${payload.title}*\n${payload.message}` : payload.message;
+    
     try {
-      const body: any = {
-        title: payload.title,
-        message: payload.message,
-        timestamp: new Date().toISOString(),
-        metadata: payload.metadata,
+      const result = await adapter.send(message, { metadata: payload.metadata });
+      return { 
+        success: result.success, 
+        channel: 'webhook',
+        messageId: result.messageId, 
+        error: result.error 
       };
-
-      const response = await fetch(webhook.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (response.ok) {
-        this.emit('notify:sent', { channel: 'webhook', message: payload.message });
-        return { success: true, channel: 'webhook' };
-      } else {
-        return { success: false, channel: 'webhook', error: `HTTP ${response.status}` };
-      }
     } catch (e: any) {
       return { success: false, channel: 'webhook', error: e.message };
     }
@@ -418,12 +248,8 @@ let defaultManager: NotifyManager | null = null;
 /**
  * Create a notify manager
  */
-export function createNotifyManager(config?: {
-  telegram?: TelegramConfig;
-  discord?: DiscordConfig;
-  slack?: SlackConfig;
-}): NotifyManager {
-  return new NotifyManager(config);
+export function createNotifyManager(): NotifyManager {
+  return new NotifyManager();
 }
 
 /**

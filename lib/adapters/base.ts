@@ -153,17 +153,17 @@ export abstract class BaseAdapter extends EventEmitter<AdapterEvents> {
 // Adapter Factory & Registry
 // ============================================================================
 
-export interface AdapterRegistry {
+export interface AdapterRegistryMap {
   [key: string]: BaseAdapter;
 }
 
-const adapters: AdapterRegistry = {};
+const adapterMap: AdapterRegistryMap = {};
 
 /**
  * Register an adapter
  */
 export function registerAdapter(name: string, adapter: BaseAdapter): void {
-  adapters[name] = adapter;
+  adapterMap[name] = adapter;
   adapter.emit('adapter:connected', { adapter: name });
 }
 
@@ -171,24 +171,24 @@ export function registerAdapter(name: string, adapter: BaseAdapter): void {
  * Get registered adapter by name
  */
 export function getAdapter(name: string): BaseAdapter | undefined {
-  return adapters[name];
+  return adapterMap[name];
 }
 
 /**
  * Get all registered adapters
  */
 export function getAllAdapters(): BaseAdapter[] {
-  return Object.values(adapters);
+  return Object.values(adapterMap);
 }
 
 /**
  * Unregister an adapter
  */
 export function unregisterAdapter(name: string): boolean {
-  const adapter = adapters[name];
+  const adapter = adapterMap[name];
   if (adapter) {
     adapter.emit('adapter:disconnected', { adapter: name });
-    delete adapters[name];
+    delete adapterMap[name];
     return true;
   }
   return false;
@@ -209,3 +209,154 @@ export async function broadcast(message: string, options?: SendOptions): Promise
   
   return results;
 }
+
+// ============================================================================
+// AdapterRegistry Class (mirrors ConnectorRegistry)
+// ============================================================================
+
+export class AdapterRegistry {
+  private adapters = new Map<string, BaseAdapter>();
+  
+  /**
+   * Register an adapter
+   */
+  register(name: string, adapter: BaseAdapter): void {
+    this.adapters.set(name, adapter);
+    adapter.emit('adapter:connected', { adapter: name });
+  }
+  
+  /**
+   * Get adapter by name
+   */
+  get(name: string): BaseAdapter | undefined {
+    return this.adapters.get(name);
+  }
+  
+  /**
+   * Get all adapters
+   */
+  getAll(): BaseAdapter[] {
+    return Array.from(this.adapters.values());
+  }
+  
+  /**
+   * Unregister an adapter
+   */
+  unregister(name: string): boolean {
+    const adapter = this.adapters.get(name);
+    if (adapter) {
+      adapter.emit('adapter:disconnected', { adapter: name });
+      this.adapters.delete(name);
+      return true;
+    }
+    return false;
+  }
+  
+  /**
+   * Check if adapter exists
+   */
+  has(name: string): boolean {
+    return this.adapters.has(name);
+  }
+  
+  /**
+   * List all adapter names
+   */
+  list(): string[] {
+    return Array.from(this.adapters.keys());
+  }
+  
+  /**
+   * Broadcast to all ready adapters
+   */
+  async broadcast(message: string, options?: SendOptions): Promise<Map<string, AdapterResult>> {
+    const results = new Map<string, AdapterResult>();
+    
+    for (const adapter of this.getAll()) {
+      if (adapter.isReady()) {
+        const result = await adapter.send(message, options);
+        results.set(adapter.name, result);
+      }
+    }
+    
+    return results;
+  }
+}
+
+// Default registry instance
+export const adapterRegistry = new AdapterRegistry();
+
+// Convenience functions using default registry
+export function register(name: string, adapter: BaseAdapter): void {
+  adapterRegistry.register(name, adapter);
+}
+
+export function get(name: string): BaseAdapter | undefined {
+  return adapterRegistry.get(name);
+}
+
+export function getAll(): BaseAdapter[] {
+  return adapterRegistry.getAll();
+}
+
+export function unregister(name: string): boolean {
+  return adapterRegistry.unregister(name);
+}
+
+export function has(name: string): boolean {
+  return adapterRegistry.has(name);
+}
+
+// ============================================================================
+// Factory Functions
+// ============================================================================
+
+/**
+ * Create an adapter by type - lazy imports to avoid circular deps
+ */
+export async function createAdapter(
+  type: AdapterType, 
+  config?: TelegramAdapterConfig | DiscordAdapterConfig | SlackAdapterConfig | WebhookAdapterConfig
+): Promise<BaseAdapter | undefined> {
+  switch (type) {
+    case 'telegram': {
+      const { createTelegramAdapter } = await import('./telegram');
+      return createTelegramAdapter(config as TelegramAdapterConfig);
+    }
+    case 'discord': {
+      const { createDiscordAdapter } = await import('./discord');
+      return createDiscordAdapter(config as DiscordAdapterConfig);
+    }
+    case 'slack': {
+      const { createSlackAdapter } = await import('./slack');
+      return createSlackAdapter(config as SlackAdapterConfig);
+    }
+    case 'webhook': {
+      const { createWebhookAdapter } = await import('./webhook');
+      return createWebhookAdapter('webhook', config as WebhookAdapterConfig);
+    }
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Create and register an adapter
+ */
+export async function createAndRegister(
+  name: string, 
+  type: AdapterType, 
+  config?: TelegramAdapterConfig | DiscordAdapterConfig | SlackAdapterConfig | WebhookAdapterConfig
+): Promise<BaseAdapter | undefined> {
+  const adapter = await createAdapter(type, config);
+  if (adapter) {
+    register(name, adapter);
+  }
+  return adapter;
+}
+
+// Type imports for factory functions
+import type { TelegramAdapterConfig } from './telegram';
+import type { DiscordAdapterConfig } from './discord';
+import type { SlackAdapterConfig } from './slack';
+import type { WebhookAdapterConfig } from './webhook';
