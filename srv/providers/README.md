@@ -5,16 +5,29 @@ This directory contains platform-specific deployment configurations for Regarded
 ## Structure
 
 ```
-provider/
-├── cloudflare/          # Cloudflare Pages + Workers
-│   ├── _headers         # Caching & security headers
-│   ├── _redirects      # URL redirects
-│   └── wrangler.toml   # Worker configuration
-├── vercel/              # Vercel
-│   └── vercel.json     # Vercel configuration
-└── netlify/             # Netlify
-    └── netlify.toml    # Netlify configuration
+providers/
+├── README.md            # This file
+├── cloudflare/         # Cloudflare Pages + Workers
+│   ├── _headers        # Caching & security headers (generated from headers.ts)
+│   ├── _redirects     # URL redirects
+│   ├── config.ts      # TypeScript config (imports from src/headers.ts)
+│   └── wrangler.toml # Worker configuration
+├── vercel/             # Vercel
+│   ├── config.ts      # TypeScript config
+│   └── vercel.json    # Vercel configuration
+└── netlify/            # Netlify
+    ├── config.ts      # TypeScript config
+    └── netlify.toml  # Netlify configuration
 ```
+
+## Global Headers
+
+All providers share common headers defined in `srv/src/headers.ts`:
+- Security: CSP, HSTS, X-Frame-Options, etc.
+- Caching: immutable for assets, short for HTML
+- CORS: Cross-origin policies
+
+Providers can add their own headers that override global defaults.
 
 ## Usage
 
