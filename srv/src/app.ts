@@ -8,12 +8,13 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { timing } from 'hono/timing';
+import { cookie } from 'hono/cookie';
 import type { Context } from 'hono';
 
 // Import routes
 import { authRoutes } from './routes/auth';
 import { apiRoutes } from './routes/api';
-import { webhookRoutes } from './routes/webhooks';
+// import { webhookRoutes } from './routes/webhooks';
 
 // ============================================================================
 // App
@@ -37,6 +38,9 @@ app.use('*', cors({
 
 // Logger
 app.use('*', logger());
+
+// Cookie parser
+app.use('*', cookie());
 
 // ============================================================================
 // Routes

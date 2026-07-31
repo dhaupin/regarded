@@ -5,26 +5,7 @@
  * Used by the web app backend.
  */
 
-// Use Cloudflare types in Workers, fallback to global for Node.js tests
-import { Request } from '@cloudflare/workers-types';
-const Response = globalThis.Response ?? (class MockResponse {
-  private body: string;
-  private status: number;
-  private headers: Headers;
-  
-  constructor(body?: BodyInit | null, init?: ResponseInit) {
-    this.body = typeof body === 'string' ? body : '';
-    this.status = init?.status ?? 200;
-    this.headers = new Headers(init?.headers);
-  }
-  
-  get ok() { return this.status >= 200 && this.status < 300; }
-  get statusText() { return String(this.status); }
-  get headers() { return this.headers; }
-  
-  json() { return JSON.parse(this.body); }
-  text() { return this.body; }
-});
+// Use global Response (available in Node.js 18+ and Workers)
 
 // ============================================================================
 // Request/Response Types

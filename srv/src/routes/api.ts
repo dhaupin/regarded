@@ -7,6 +7,53 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 
+// Helper to get user ID from request (simplified for demo)
+async function getUserId(c: Context): Promise<string | null> {
+  const auth = c.req.header('Authorization');
+  const token = auth?.substring(7);
+  if (!token) return null;
+  
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.userId || null;
+  } catch {
+    return null;
+  }
+}
+
+// Helper to list items from KV
+async function listKVItems(c: Context, prefix: string): Promise<any[]> {
+  const list = await c.env.KV.list({ prefix });
+  const items: any[] = [];
+  
+  for (const key of list.keys) {
+    const value = await c.env.KV.get(key.name);
+    if (value) {
+      items.push(JSON.parse(value));
+    }
+  }
+  
+  return items;
+}
+
+// Helper to get item from KV
+async function getKVItem(c: Context, key: string): Promise<any | null> {
+  const value = await c.env.KV.get(key);
+  return value ? JSON.parse(value) : null;
+}
+
+// Helper to save item to KV
+async function saveKVItem(c: Context, key: string, data: any): Promise<void> {
+  await c.env.KV.put(key, JSON.stringify(data));
+}
+
+// Helper to delete item from KV
+async function deleteKVItem(c: Context, key: string): Promise<void> {
+  await c.env.KV.delete(key);
+}
+
 export const apiRoutes = new Hono<{ Bindings: Env }>();
 
 // ============================================================================
@@ -15,34 +62,135 @@ export const apiRoutes = new Hono<{ Bindings: Env }>();
 
 // List connectors
 apiRoutes.get('/connectors', async (c: Context) => {
-  // TODO: Get user connectors from D2
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const items = await listKVItems(c, `connector:${userId}:`);
   
   return c.json({
     success: true,
     data: {
-      items: [
-        { id: '1', exchange: 'kraken', label: 'Main Kraken', paper: true },
-        { id: '2', exchange: 'solana', label: 'Solana Wallet', paper: true },
-      ],
-      total: 2,
+      items: items.map(i => ({
+        id: i.id,
+        exchange: i.exchange,
+        label: i.label,
+        paper: i.paperMode,
+        status: 'connected',
+      })),
+      total: items.length,
     },
   });
 });
 
-// Get connector
-apiRoutes.get('/connectors/:id', async (c: Context) => {
-  const id = c.req.param('id');
+// Create connector
+apiRoutes.post('/connectors', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const body = await c.req.json();
+  const id = crypto.randomUUID();
+  
+  const connector = {
+    id,
+    userId,
+    exchange: body.exchange || 'kraken',
+    label: body.label || '',
+    paperMode: body.paperMode ?? true,
+    apiKey: body.apiKey, // In production, encrypt this
+    apiSecret: body.apiSecret, // In production, encrypt this
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  
+  await saveKVItem(c, `connector:${userId}:${id}`, connector);
   
   return c.json({
     success: true,
     data: {
-      id,
-      exchange: 'kraken',
-      label: 'Main Kraken',
-      paper: true,
-      created_at: Date.now(),
+      id: connector.id,
+      exchange: connector.exchange,
+      label: connector.label,
+      paper: connector.paperMode,
+      status: 'connected',
+    },
+  }, 201);
+});
+
+// Get connector
+apiRoutes.get('/connectors/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  const connector = await getKVItem(c, `connector:${userId}:${id}`);
+  
+  if (!connector) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Connector not found' } }, 404);
+  }
+  
+  return c.json({
+    success: true,
+    data: {
+      id: connector.id,
+      exchange: connector.exchange,
+      label: connector.label,
+      paper: connector.paperMode,
+      created_at: connector.createdAt,
     },
   });
+});
+
+// Update connector
+apiRoutes.put('/connectors/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  const existing = await getKVItem(c, `connector:${userId}:${id}`);
+  
+  if (!existing) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Connector not found' } }, 404);
+  }
+
+  const body = await c.req.json();
+  const updated = {
+    ...existing,
+    ...body,
+    updatedAt: Date.now(),
+  };
+  
+  await saveKVItem(c, `connector:${userId}:${id}`, updated);
+  
+  return c.json({
+    success: true,
+    data: {
+      id: updated.id,
+      exchange: updated.exchange,
+      label: updated.label,
+      paper: updated.paperMode,
+    },
+  });
+});
+
+// Delete connector
+apiRoutes.delete('/connectors/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  await deleteKVItem(c, `connector:${userId}:${id}`);
+  
+  return c.json({ success: true });
 });
 
 // ============================================================================
@@ -51,28 +199,98 @@ apiRoutes.get('/connectors/:id', async (c: Context) => {
 
 // List strategies
 apiRoutes.get('/strategies', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const items = await listKVItems(c, `strategy:${userId}:`);
+  
   return c.json({
     success: true,
     data: {
-      items: [],
-      total: 0,
+      items,
+      total: items.length,
     },
   });
 });
 
 // Create strategy
 apiRoutes.post('/strategies', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
   const body = await c.req.json();
+  const id = crypto.randomUUID();
   
-  return c.json({
-    success: true,
-    data: {
-      id: crypto.randomUUID(),
-      ...body,
-      created_at: Date.now(),
-      updated_at: Date.now(),
-    },
-  }, 201);
+  const strategy = {
+    id,
+    userId,
+    name: body.name || 'Untitled Strategy',
+    indicators: body.indicators || [],
+    intervals: body.intervals || ['1h'],
+    symbols: body.symbols || [],
+    enabled: body.enabled ?? true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  
+  await saveKVItem(c, `strategy:${userId}:${id}`, strategy);
+  
+  return c.json({ success: true, data: strategy }, 201);
+});
+
+// Get strategy
+apiRoutes.get('/strategies/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  const strategy = await getKVItem(c, `strategy:${userId}:${id}`);
+  
+  if (!strategy) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Strategy not found' } }, 404);
+  }
+  
+  return c.json({ success: true, data: strategy });
+});
+
+// Update strategy
+apiRoutes.put('/strategies/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  const existing = await getKVItem(c, `strategy:${userId}:${id}`);
+  
+  if (!existing) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Strategy not found' } }, 404);
+  }
+
+  const body = await c.req.json();
+  const updated = { ...existing, ...body, updatedAt: Date.now() };
+  await saveKVItem(c, `strategy:${userId}:${id}`, updated);
+  
+  return c.json({ success: true, data: updated });
+});
+
+// Delete strategy
+apiRoutes.delete('/strategies/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  await deleteKVItem(c, `strategy:${userId}:${id}`);
+  
+  return c.json({ success: true });
 });
 
 // ============================================================================
@@ -81,28 +299,98 @@ apiRoutes.post('/strategies', async (c: Context) => {
 
 // List rules
 apiRoutes.get('/rules', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const items = await listKVItems(c, `rule:${userId}:`);
+  
   return c.json({
     success: true,
     data: {
-      items: [],
-      total: 0,
+      items,
+      total: items.length,
     },
   });
 });
 
 // Create rule
 apiRoutes.post('/rules', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
   const body = await c.req.json();
+  const id = crypto.randomUUID();
   
-  return c.json({
-    success: true,
-    data: {
-      id: crypto.randomUUID(),
-      ...body,
-      created_at: Date.now(),
-      updated_at: Date.now(),
-    },
-  }, 201);
+  const rule = {
+    id,
+    userId,
+    name: body.name || 'Untitled Rule',
+    conditions: body.conditions || [],
+    triggers: body.triggers || [],
+    condition_logic: body.condition_logic || 'and',
+    enabled: body.enabled ?? true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  
+  await saveKVItem(c, `rule:${userId}:${id}`, rule);
+  
+  return c.json({ success: true, data: rule }, 201);
+});
+
+// Get rule
+apiRoutes.get('/rules/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  const rule = await getKVItem(c, `rule:${userId}:${id}`);
+  
+  if (!rule) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Rule not found' } }, 404);
+  }
+  
+  return c.json({ success: true, data: rule });
+});
+
+// Update rule
+apiRoutes.put('/rules/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  const existing = await getKVItem(c, `rule:${userId}:${id}`);
+  
+  if (!existing) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Rule not found' } }, 404);
+  }
+
+  const body = await c.req.json();
+  const updated = { ...existing, ...body, updatedAt: Date.now() };
+  await saveKVItem(c, `rule:${userId}:${id}`, updated);
+  
+  return c.json({ success: true, data: updated });
+});
+
+// Delete rule
+apiRoutes.delete('/rules/:id', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const id = c.req.param('id');
+  await deleteKVItem(c, `rule:${userId}:${id}`);
+  
+  return c.json({ success: true });
 });
 
 // ============================================================================

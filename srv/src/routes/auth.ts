@@ -6,6 +6,35 @@
 
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { createCookie } from 'hono/cookie';
+
+// JWT Secret from environment
+const getJWTSecret = (env: Env) => env.JWT_SECRET || 'dev-secret-change-in-production';
+
+// Simple JWT creation (for demo - in production use proper JWT library)
+function createJWT(payload: any, secret: string): string {
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const data = btoa(JSON.stringify({
+    ...payload,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7 days
+  }));
+  const signature = btoa('signature'); // Simplified - in production use proper signing
+  return `${header}.${data}.${signature}`;
+}
+
+// Simple JWT verification (for demo)
+function verifyJWT(token: string): { valid: boolean; payload?: any } {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return { valid: false };
+    const payload = JSON.parse(atob(parts[1]));
+    if (payload.exp < Math.floor(Date.now() / 1000)) return { valid: false };
+    return { valid: true, payload };
+  } catch {
+    return { valid: false };
+  }
+}
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
 
@@ -67,32 +96,111 @@ authRoutes.get('/callback', async (c: Context) => {
 
 // Logout
 authRoutes.post('/logout', async (c: Context) => {
-  // Clear session
-  // TODO: Implement logout
-  
+  // Get token from header or cookie
+  const auth = c.req.header('Authorization');
+  let token = auth?.substring(7);
+
+  if (!token) {
+    token = c.req.cookie('auth_token');
+  }
+
+  if (token) {
+    // Verify and get user
+    const verification = verifyJWT(token);
+    if (verification.valid && verification.payload) {
+      // Delete session from KV
+      const sessionKey = `session:${verification.payload.userId}`;
+      await c.env.KV.delete(sessionKey);
+    }
+  }
+
+  // Clear cookie
+  c.cookie('auth_token', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+    maxAge: 0,
+    path: '/',
+  });
+
   return c.json({ success: true });
+});
+
+// Login with email/password (demo mode - accepts any credentials)
+authRoutes.post('/login', async (c: Context) => {
+  const body = await c.req.json();
+  const { email, password } = body;
+
+  if (!email || !password) {
+    return c.json({ success: false, error: { code: 'MISSING_CREDENTIALS', message: 'Email and password required' } }, 400);
+  }
+
+  // Demo mode: accept any login
+  // In production: verify against stored credentials
+  const user = {
+    id: crypto.randomUUID(),
+    email,
+    name: email.split('@')[0],
+    role: 'trader',
+  };
+
+  // Create JWT
+  const secret = getJWTSecret(c.env);
+  const token = createJWT({ userId: user.id, email: user.email, role: user.role }, secret);
+
+  // Store session in KV
+  const sessionKey = `session:${user.id}`;
+  await c.env.KV.put(sessionKey, JSON.stringify({ user, token }), { expirationTtl: 7 * 24 * 60 * 60 });
+
+  // Set cookie
+  c.cookie('auth_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+    maxAge: 7 * 24 * 60 * 60,
+    path: '/',
+  });
+
+  return c.json({
+    success: true,
+    token,
+    user,
+  });
 });
 
 // Get current user
 authRoutes.get('/me', async (c: Context) => {
-  // Check Authorization header
+  // Check Authorization header first
   const auth = c.req.header('Authorization');
-  if (!auth?.startsWith('Bearer ')) {
+  let token = auth?.substring(7);
+
+  // Fall back to cookie
+  if (!token) {
+    token = c.req.cookie('auth_token');
+  }
+
+  if (!token) {
     return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing authorization' } }, 401);
   }
-  
-  const token = auth.substring(7);
-  
-  // Verify token and get user
-  // TODO: Implement token verification
-  
+
+  // Verify token
+  const verification = verifyJWT(token);
+  if (!verification.valid || !verification.payload) {
+    return c.json({ success: false, error: { code: 'INVALID_TOKEN', message: 'Invalid or expired token' } }, 401);
+  }
+
+  // Get user from KV session
+  const sessionKey = `session:${verification.payload.userId}`;
+  const session = await c.env.KV.get(sessionKey);
+
+  if (!session) {
+    return c.json({ success: false, error: { code: 'SESSION_EXPIRED', message: 'Session expired' } }, 401);
+  }
+
+  const { user } = JSON.parse(session);
+
   return c.json({
     success: true,
-    data: {
-      id: 'user-id',
-      email: 'user@example.com',
-      name: 'Test User',
-      role: 'trader',
-    },
+    data: user,
   });
 });

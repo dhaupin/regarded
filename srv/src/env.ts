@@ -8,10 +8,8 @@ export interface Env {
   // Database
   DB: D1Database;
   
-  // KV Namespaces
-  KV_CACHE: KVNamespace;
-  KV_SESSIONS: KVNamespace;
-  KV_CONFIG: KVNamespace;
+  // KV Namespace (single binding for all data)
+  KV: KVNamespace;
   
   // Environment variables
   NODE_ENV: string;
