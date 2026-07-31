@@ -1,9 +1,9 @@
 # Regarded Backend - Cloudflare Workers
 # 
-# IMPORTANT: Copy provider/cloudflare/wrangler.toml to srv/wrangler.toml
+# IMPORTANT: Copy providers/cloudflare/wrangler.toml to srv/wrangler.toml
 # and update with your actual KV/D1 IDs before deploying.
 #
-# See provider/cloudflare/ for the full configuration with staging/prod environments.
+# See providers/cloudflare/ for the full configuration with staging/prod environments.
 
 name = "regarded-backend"
 main = "src/index.ts"
