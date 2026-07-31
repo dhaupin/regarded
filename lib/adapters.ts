@@ -15,7 +15,7 @@
  * const adapter = getAdapter('main');
  * await adapter?.send('Hello!');
  *
- * // Broadcast to all adapters
+ * // Broadcast to all registered adapters
  * await broadcast('Hello everyone!');
  */
 
@@ -32,41 +32,41 @@ export {
   getAllAdapters,
   unregisterAdapter,
   broadcast,
-} from './base';
+} from './adapters/base';
 
 export {
   TelegramAdapter,
   createTelegramAdapter,
   type TelegramAdapterConfig,
-} from './telegram';
+} from './adapters/telegram';
 
 export {
   DiscordAdapter,
   createDiscordAdapter,
   type DiscordAdapterConfig,
-} from './discord';
+} from './adapters/discord';
 
 export {
   SlackAdapter,
   createSlackAdapter,
   type SlackAdapterConfig,
-} from './slack';
+} from './adapters/slack';
 
 export {
   WebhookAdapter,
   createWebhookAdapter,
   type WebhookAdapterConfig,
-} from './webhook';
+} from './adapters/webhook';
 
 // ============================================================================
 // Factory Functions
 // ============================================================================
 
-import { TelegramAdapter, type TelegramAdapterConfig } from './telegram';
-import { DiscordAdapter, type DiscordAdapterConfig } from './discord';
-import { SlackAdapter, type SlackAdapterConfig } from './slack';
-import { WebhookAdapter, type WebhookAdapterConfig } from './webhook';
-import { BaseAdapter, registerAdapter } from './base';
+import { TelegramAdapter, type TelegramAdapterConfig } from './adapters/telegram';
+import { DiscordAdapter, type DiscordAdapterConfig } from './adapters/discord';
+import { SlackAdapter, type SlackAdapterConfig } from './adapters/slack';
+import { WebhookAdapter, type WebhookAdapterConfig } from './adapters/webhook';
+import { BaseAdapter, registerAdapter } from './adapters/base';
 
 /**
  * Create adapter by type
