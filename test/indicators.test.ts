@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { RSIIndicator, KDJIndicator, BollingerBandsIndicator, MACDIndicator, indicators, createIndicator, calculateIndicator } from '../lib/indicators';
+import { RSIIndicator, KDJIndicator, BollingerBandsIndicator, MACDIndicator, StochasticIndicator, ATRIndicator, EMAIndicator, VWAPIndicator, indicators, createIndicator, calculateIndicator } from '../lib/indicators';
 
 describe('Indicators', () => {
   // Generate mock candles with deterministic prices for reliable indicator calculation
@@ -116,6 +116,65 @@ describe('Indicators', () => {
       
       expect(result).toBeDefined();
       expect(result?.value).toBeDefined();
+    });
+  });
+
+  describe('Stochastic', () => {
+    it('should calculate Stochastic Oscillator', () => {
+      const candles = generateCandles(30, 100);
+      const stochastic = new StochasticIndicator();
+      const result = stochastic.calculate(candles);
+      
+      expect(result).toBeDefined();
+      expect(Array.isArray(result.value)).toBe(true);
+      expect(result.value).toHaveLength(2); // %K, %D
+      expect(['buy', 'sell', 'neutral']).toContain(result.signal);
+    });
+
+    it('should respect custom parameters', () => {
+      const candles = generateCandles(30, 100);
+      const stochastic = new StochasticIndicator({ k_period: 5, d_period: 3 });
+      const result = stochastic.calculate(candles);
+      
+      expect(result.metadata?.k).toBeDefined();
+    });
+  });
+
+  describe('ATR', () => {
+    it('should calculate Average True Range', () => {
+      const candles = generateCandles(30, 100);
+      const atr = new ATRIndicator();
+      const result = atr.calculate(candles);
+      
+      expect(result).toBeDefined();
+      expect(typeof result.value).toBe('number');
+      expect(result.value).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('EMA', () => {
+    it('should calculate Exponential Moving Average', () => {
+      const candles = generateCandles(50, 100);
+      const ema = new EMAIndicator();
+      const result = ema.calculate(candles);
+      
+      expect(result).toBeDefined();
+      expect(typeof result.value).toBe('number');
+      // EMA returns 0 if insufficient data, but we test with enough
+      expect(result.value).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('VWAP', () => {
+    it('should calculate Volume Weighted Average Price', () => {
+      const candles = generateCandles(30, 100);
+      const vwap = new VWAPIndicator();
+      const result = vwap.calculate(candles);
+      
+      expect(result).toBeDefined();
+      expect(typeof result.value).toBe('number');
+      expect(result.value).toBeGreaterThan(0);
+      expect(['buy', 'sell']).toContain(result.signal);
     });
   });
 });

@@ -177,6 +177,184 @@ export class MACDIndicator extends BaseIndicator {
 }
 
 /**
+ * Stochastic Oscillator
+ */
+export class StochasticIndicator extends BaseIndicator {
+  name = 'stochastic';
+  version = '1.0.0';
+  defaultParams = { k_period: 14, d_period: 3, overbought: 80, oversold: 20 };
+  
+  calculate(candles: Candle[]): IndicatorResult {
+    const { k_period, d_period, overbought, oversold } = this.params;
+    
+    if (candles.length < k_period + d_period) {
+      return { value: [50, 50], signal: 'neutral' };
+    }
+    
+    const kValues: number[] = [];
+    
+    for (let i = k_period - 1; i < candles.length; i++) {
+      const slice = candles.slice(i - k_period + 1, i + 1);
+      const high = Math.max(...slice.map(c => c.high));
+      const low = Math.min(...slice.map(c => c.low));
+      const close = candles[i].close;
+      
+      if (high === low) {
+        kValues.push(50);
+      } else {
+        kValues.push(((close - low) / (high - low)) * 100);
+      }
+    }
+    
+    // Calculate %D (smoothed %K)
+    const dValues: number[] = [];
+    for (let i = d_period - 1; i < kValues.length; i++) {
+      const slice = kValues.slice(i - d_period + 1, i + 1);
+      dValues.push(slice.reduce((a, b) => a + b, 0) / d_period);
+    }
+    
+    const k = kValues[kValues.length - 1];
+    const d = dValues[dValues.length - 1];
+    
+    let signal: IndicatorSignal = 'neutral';
+    if (k < oversold && d < oversold) signal = 'buy';
+    else if (k > overbought && d > overbought) signal = 'sell';
+    
+    return {
+      value: [k, d],
+      signal,
+      metadata: { k, d, overbought, oversold },
+    };
+  }
+}
+
+/**
+ * Average True Range (ATR)
+ */
+export class ATRIndicator extends BaseIndicator {
+  name = 'atr';
+  version = '1.0.0';
+  defaultParams = { period: 14 };
+  
+  calculate(candles: Candle[]): IndicatorResult {
+    const { period } = this.params;
+    
+    if (candles.length < period + 1) {
+      return { value: 0, signal: 'neutral', metadata: { atr: 0, period } };
+    }
+    
+    const trueRanges: number[] = [];
+    
+    for (let i = 1; i < candles.length; i++) {
+      const high = candles[i].high;
+      const low = candles[i].low;
+      const prevClose = candles[i - 1].close;
+      
+      const tr = Math.max(
+        high - low,
+        Math.abs(high - prevClose),
+        Math.abs(low - prevClose)
+      );
+      trueRanges.push(tr);
+    }
+    
+    if (trueRanges.length < period) {
+      return { value: 0, signal: 'neutral', metadata: { atr: 0, period } };
+    }
+    
+    // Calculate ATR using Wilder's smoothing
+    const atr: number[] = [];
+    let sum = trueRanges.slice(0, period).reduce((a, b) => a + b, 0);
+    atr.push(sum / period);
+    
+    for (let i = period; i < trueRanges.length; i++) {
+      const value = (atr[atr.length - 1] * (period - 1) + trueRanges[i]) / period;
+      atr.push(value);
+    }
+    
+    const value = atr[atr.length - 1];
+    
+    return {
+      value: isNaN(value) ? 0 : value,
+      signal: 'neutral',
+      metadata: { atr: isNaN(value) ? 0 : value, period },
+    };
+  }
+}
+
+/**
+ * Exponential Moving Average (EMA)
+ */
+export class EMAIndicator extends BaseIndicator {
+  name = 'ema';
+  version = '1.0.0';
+  defaultParams = { period: 20 };
+  
+  calculate(candles: Candle[]): IndicatorResult {
+    const { period } = this.params;
+    const closes = this.getValues(candles);
+    
+    if (closes.length < period) {
+      return { value: 0, signal: 'neutral', metadata: { ema: 0, period } };
+    }
+    
+    const mult = 2 / (period + 1);
+    let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    
+    for (let i = period; i < closes.length; ema = (closes[i] - ema) * mult + ema, i++);
+    
+    if (isNaN(ema)) {
+      return { value: 0, signal: 'neutral', metadata: { ema: 0, period } };
+    }
+    
+    const currentPrice = closes[closes.length - 1];
+    const signal = currentPrice > ema ? 'buy' : 'sell';
+    
+    return {
+      value: ema,
+      signal,
+      metadata: { ema, period },
+    };
+  }
+}
+
+/**
+ * Volume Weighted Average Price (VWAP)
+ */
+export class VWAPIndicator extends BaseIndicator {
+  name = 'vwap';
+  version = '1.0.0';
+  defaultParams = { period: 20 };
+  
+  calculate(candles: Candle[]): IndicatorResult {
+    const { period } = this.params;
+    const lookback = Math.min(period, candles.length);
+    const recentCandles = candles.slice(-lookback);
+    
+    let cumulativeTPV = 0; // Typical Price * Volume
+    let cumulativeVolume = 0;
+    
+    for (const candle of recentCandles) {
+      const typicalPrice = (candle.high + candle.low + candle.close) / 3;
+      const volume = candle.volume || 1;
+      cumulativeTPV += typicalPrice * volume;
+      cumulativeVolume += volume;
+    }
+    
+    const vwap = cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : 0;
+    
+    const currentPrice = candles[candles.length - 1].close;
+    const signal = currentPrice > vwap ? 'buy' : 'sell';
+    
+    return {
+      value: vwap,
+      signal,
+      metadata: { vwap, period },
+    };
+  }
+}
+
+/**
  * Indicator Registry
  */
 export class IndicatorRegistry {
@@ -187,6 +365,10 @@ export class IndicatorRegistry {
     this.register('kdj', KDJIndicator);
     this.register('boll', BollingerBandsIndicator);
     this.register('macd', MACDIndicator);
+    this.register('stochastic', StochasticIndicator);
+    this.register('atr', ATRIndicator);
+    this.register('ema', EMAIndicator);
+    this.register('vwap', VWAPIndicator);
   }
   
   register(name: string, cls: new () => BaseIndicator): void {
