@@ -4,8 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table as AntTable, Spin, Select } from 'antd';
 import { WalletOutlined } from '@ant-design/icons';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiGet } from '@/lib/api';
 
 interface Position {
   id: string;
@@ -28,17 +27,14 @@ export function PositionsList() {
   const [sideFilter, setSideFilter] = useState<string>('all');
 
   useEffect(() => {
-    fetch(`${API_URL}/positions`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-      },
-    })
-      .then((res) => res.json())
+    apiGet<{ items: Position[] }>('/positions')
       .then((data) => {
-        setPositions(data.data?.items || []);
-        setLoading(false);
+        setPositions(data.items || []);
       })
       .catch(() => {
+        // Use empty array on error
+      })
+      .finally(() => {
         setLoading(false);
       });
   }, []);

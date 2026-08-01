@@ -7,8 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from 'antd';
 import { message } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiPost } from '@/lib/api';
 
 interface FormErrors {
   name?: string;
@@ -52,24 +51,14 @@ export function StrategiesCreate() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${API_URL}/strategies`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          symbols: formData.symbols.split(',').map(s => s.trim()).filter(Boolean),
-          intervals: formData.intervals,
-          enabled: formData.enabled,
-        }),
+      const data = await apiPost<{ success: boolean; error?: { message: string } }>('/strategies', {
+        name: formData.name,
+        symbols: formData.symbols.split(',').map(s => s.trim()).filter(Boolean),
+        intervals: formData.intervals,
+        enabled: formData.enabled,
       });
-
-      const data = await response.json();
       
-      if (response.ok && data.success) {
+      if (data.success) {
         message.success('Strategy created successfully');
         navigate('/strategies');
       } else {
