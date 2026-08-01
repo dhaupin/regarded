@@ -214,8 +214,9 @@ VITE_API_URL=https://your-workers-domain.workers.dev
 | Setting | Value |
 |---------|-------|
 | Production branch | `main` |
-| Build command | `npm run build:frontend` |
-| Build output directory | `app/dist` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Root directory | `app` |
 
 4. Add custom domain (optional)
 
