@@ -7,7 +7,7 @@ import { useAuthProvider } from '@/hooks/useAuth';
 import { message } from 'antd';
 import { Spin, Button, Select, Tabs, Tag, Alert } from 'antd';
 import { PlusOutlined, DeleteOutlined, ApiOutlined, KeyOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
-import { apiGet, apiPut, apiPost, apiDelete } from '@/lib/api';
+import { apiGet, apiPut } from '@/lib/api';
 
 interface UserConfig {
   theme: string;

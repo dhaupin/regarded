@@ -72,7 +72,7 @@ export function RulesCreate() {
         setValidationResult({ valid: true, message: data.data?.message || 'Valid' });
         message.success('Rule validation passed');
       } else {
-        const details = data.error?.details || [];
+        const details = (data.error?.details || []) as string[];
         setValidationResult({ valid: false, message: data.error?.message || 'Validation failed', details });
         message.error(data.error?.message || 'Validation failed');
       }

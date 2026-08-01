@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Spin, Select, Checkbox } from 'antd';
 import { PlusOutlined, ThunderboltOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
-import { apiGet, apiDelete } from '@/lib/api';
+import { apiGet, apiPut, apiDelete } from '@/lib/api';
 
 interface Strategy {
   id: string;

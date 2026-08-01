@@ -93,11 +93,11 @@ export function ConnectorsCreate() {
     try {
       const data = await apiPost<{ success: boolean }>('/connectors', formData);
       
-      if (data.success) {
+      if (data && (data as any).success) {
         message.success('Connector created successfully');
         navigate('/connectors');
       } else {
-        message.error(data.error?.message || 'Failed to create connector');
+        message.error('Failed to create connector');
       }
     } catch (error) {
       message.error('Failed to create connector');
