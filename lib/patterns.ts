@@ -287,7 +287,8 @@ export class TrianglePattern extends BasePattern {
       const highSlopeAbs = Math.abs(highReg.slope);
       const lowSlopeAbs = Math.abs(lowReg.slope);
       if (highReg.slope < -0.05 && lowReg.slope > 0.05) {
-        return { detected: true, confidence: 0.7, direction: 'neutral' };
+        // Symmetrical triangles can break either direction
+        return { detected: true, confidence: 0.7, direction: 'up' };
       }
     }
     

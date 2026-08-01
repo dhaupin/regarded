@@ -23,6 +23,14 @@ export class CoinbaseConnector extends BaseConnector {
     super(config);
   }
   
+  supportedIntervals(): CandleInterval[] {
+    return ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
+  }
+  
+  supportedSymbols(): string[] {
+    return ['SOL/USDT', 'BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'ADA/USDT', 'DOGE/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT', 'LTC/USDT'];
+  }
+  
   async connect(credentials: EncryptedSecrets): Promise<boolean> {
     // In production, decrypt credentials first
     // const decrypted = await decrypt(credentials, userSecret);
@@ -98,11 +106,11 @@ export class CoinbaseConnector extends BaseConnector {
     return 0;
   }
   
-  async getPrices(symbols: string[]): Promise<Record<string, number>> {
-    const prices: Record<string, number> = {};
+  async getPrices(symbols: string[]): Promise<Map<string, number>> {
+    const prices = new Map<string, number>();
     
     for (const symbol of symbols) {
-      prices[symbol] = await this.getPrice(symbol);
+      prices.set(symbol, await this.getPrice(symbol));
     }
     
     return prices;
@@ -152,26 +160,35 @@ export class CoinbaseConnector extends BaseConnector {
     
     // In paper mode, simulate order placement
     if (this.paperMode) {
-      const price = await this.getPrice(order.symbol);
+      const price = await this.getPrice(order.pair);
       
       return {
         id: orderId,
-        symbol: order.symbol,
+        pair: order.pair,
         side: order.side,
         type: order.type,
+        amount: order.amount,
+        filled_amount: order.amount,
+        price: price,
+        avg_price: price,
+        fee: 0,
         status: 'filled',
-        filled_price: price,
-        filled_size: order.size,
         created_at: Date.now(),
+        filled_at: Date.now(),
       };
     }
     
     // Real API call would go here
     return {
       id: orderId,
-      symbol: order.symbol,
+      pair: order.pair,
       side: order.side,
       type: order.type,
+      amount: order.amount,
+      filled_amount: 0,
+      price: 0,
+      avg_price: 0,
+      fee: 0,
       status: 'pending',
       created_at: Date.now(),
     };
@@ -189,10 +206,22 @@ export class CoinbaseConnector extends BaseConnector {
     return false;
   }
   
-  async getOpenOrders(): Promise<Order[]> {
+  async getOpenOrders(pair?: string): Promise<OrderResult[]> {
     if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
     
     // In paper mode, return empty
+    if (this.paperMode) {
+      return [];
+    }
+    
+    // Real API call would go here
+    return [];
+  }
+  
+  async getTradeHistory(pair?: string, limit: number = 50): Promise<Trade[]> {
+    if (!this.connected) throw createError({ code: ErrorCode.CONNECTOR_NOT_CONNECTED, message: 'Not connected', statusCode: 400 });
+    
+    // In paper mode, return mock history
     if (this.paperMode) {
       return [];
     }
@@ -211,6 +240,7 @@ export class CoinbaseConnector extends BaseConnector {
       '4h': 14400000,
       '1d': 86400000,
       '1w': 604800000,
+      '1M': 2592000000,
     };
     return map[interval] || 60000;
   }
