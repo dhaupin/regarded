@@ -7,9 +7,16 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { createCookie } from 'hono/cookie';
+import { get as getSecret } from '../../lib/secrets';
 
-// JWT Secret from environment
-const getJWTSecret = (env: Env) => env.JWT_SECRET || 'dev-secret-change-in-production';
+// JWT Secret from environment (using secrets module)
+async function getJWTSecret(env: Env): Promise<string> {
+  try {
+    return await getSecret('jwt', { env });
+  } catch {
+    return 'dev-secret-change-in-production';
+  }
+}
 
 // Simple JWT creation (for demo - in production use proper JWT library)
 function createJWT(payload: any, secret: string): string {
@@ -39,10 +46,13 @@ function verifyJWT(token: string): { valid: boolean; payload?: any } {
 export const authRoutes = new Hono<{ Bindings: Env }>();
 
 // Login with Google OAuth
-authRoutes.get('/login', (c: Context) => {
+authRoutes.get('/login', async (c: Context) => {
+  const googleClientId = await getSecret('google', { env: c.env }).catch(() => '');
+  const appUrl = await getSecret('app_url', { env: c.env }).catch(() => 'http://localhost:8787');
+  
   const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-  googleAuthUrl.searchParams.set('client_id', c.env.GOOGLE_CLIENT_ID || '');
-  googleAuthUrl.searchParams.set('redirect_uri', `${c.env.APP_URL}/auth/callback`);
+  googleAuthUrl.searchParams.set('client_id', googleClientId);
+  googleAuthUrl.searchParams.set('redirect_uri', `${appUrl}/auth/callback`);
   googleAuthUrl.searchParams.set('response_type', 'code');
   googleAuthUrl.searchParams.set('scope', 'openid email profile');
   googleAuthUrl.searchParams.set('state', crypto.randomUUID());
@@ -58,6 +68,10 @@ authRoutes.get('/callback', async (c: Context) => {
   if (!code) {
     return c.json({ success: false, error: { code: 'MISSING_CODE', message: 'Authorization code missing' } }, 400);
   }
+
+  const googleClientId = await getSecret('google', { env: c.env }).catch(() => '');
+  const googleClientSecret = await getSecret('google_secret', { env: c.env }).catch(() => '');
+  const appUrl = await getSecret('app_url', { env: c.env }).catch(() => 'http://localhost:8787');
   
   // Exchange code for tokens
   const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -65,9 +79,9 @@ authRoutes.get('/callback', async (c: Context) => {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: c.env.GOOGLE_CLIENT_ID || '',
-      client_secret: c.env.GOOGLE_CLIENT_SECRET || '',
-      redirect_uri: `${c.env.APP_URL}/auth/callback`,
+      client_id: googleClientId,
+      client_secret: googleClientSecret,
+      redirect_uri: `${appUrl}/auth/callback`,
       grant_type: 'authorization_code',
     }),
   });
@@ -144,8 +158,8 @@ authRoutes.post('/login', async (c: Context) => {
     role: 'trader',
   };
 
-  // Create JWT
-  const secret = getJWTSecret(c.env);
+  // Create JWT (async - uses secrets module)
+  const secret = await getJWTSecret(c.env);
   const token = createJWT({ userId: user.id, email: user.email, role: user.role }, secret);
 
   // Store session in KV

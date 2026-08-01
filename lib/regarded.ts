@@ -33,6 +33,24 @@ export * from './auth';
 // Config
 export { ConfigManager } from './config';
 
+// Secrets (explicit exports to avoid conflict with connectors)
+export { 
+  secrets, 
+  get as getSecret, 
+  getCached as getSecretCached,
+  set as setSecret, 
+  has as hasSecret, 
+  clear as clearSecret,
+  clearAll as clearAllSecrets,
+  types as secretTypes,
+  info as secretInfo,
+  infoAll as secretInfoAll,
+  validate as validateSecrets,
+  configure as configureSecrets,
+  secretsEvents,
+  SECRET_CONFIG,
+} from './secrets';
+
 // Utils & Storage
 export * from './storage';
 export * from './utils';
