@@ -172,12 +172,29 @@ npm install
 #### Run Locally
 
 ```bash
+cd srv
 npm run dev
 ```
 
-#### Deploy to Production
+#### Deploy via GitHub Actions (Recommended)
+
+Workers are deployed using GitHub Actions. Set up secrets in your repo:
+
+1. Go to GitHub → Repository → Settings → Secrets and variables → Actions
+2. Add these secrets:
+
+| Secret | Value |
+|--------|-------|
+| `CF_ACCOUNT_ID` | Your Cloudflare Account ID (from dashboard URL) |
+| `CF_API_TOKEN` | Cloudflare API Token (create at https://dash.cloudflare.com/profile/api-tokens) |
+
+3. Push to `main` or `staging` branch to trigger deploy
+4. Or manually trigger from GitHub → Actions → Deploy Workers → Run workflow
+
+#### Deploy Locally (Alternative)
 
 ```bash
+cd srv
 npm run deploy
 ```
 
