@@ -8,6 +8,7 @@ import {
   ThunderboltOutlined,
   FileProtectOutlined,
   SwapOutlined,
+  WalletOutlined,
   SettingOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
@@ -36,6 +37,7 @@ export function Header() {
     { key: '/strategies', icon: <ThunderboltOutlined />, label: <Link to="/strategies">Strategies</Link> },
     { key: '/rules', icon: <FileProtectOutlined />, label: <Link to="/rules">Rules</Link> },
     { key: '/trades', icon: <SwapOutlined />, label: <Link to="/trades">Trades</Link> },
+    { key: '/positions', icon: <WalletOutlined />, label: <Link to="/positions">Positions</Link> },
     { key: '/settings', icon: <SettingOutlined />, label: <Link to="/settings">Settings</Link> },
   ];
 

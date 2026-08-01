@@ -14,6 +14,7 @@ import {
   RulesCreate,
   RulesEdit,
   TradesList,
+  PositionsList,
   Settings,
 } from './pages';
 import { Header } from './components/Header';
@@ -46,6 +47,7 @@ function App() {
           <Route path="/rules/:id" element={isAuthenticated ? <RulesEdit /> : <Navigate to="/login" />} />
           
           <Route path="/trades" element={isAuthenticated ? <TradesList /> : <Navigate to="/login" />} />
+          <Route path="/positions" element={isAuthenticated ? <PositionsList /> : <Navigate to="/login" />} />
           <Route path="/settings" element={isAuthenticated ? <Settings /> : <Navigate to="/login" />} />
           
           <Route path="*" element={<Navigate to="/" replace />} />
