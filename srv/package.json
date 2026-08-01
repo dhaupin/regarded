@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "build": "esbuild src/app.ts --bundle --outfile=dist/worker.js --format=esm --platform=cloudflare --external:*.png --external:*.jpg --external:*.svg",
     "dev": "wrangler dev -c providers/cloudflare/wrangler.toml",
-    "deploy": "wrangler deploy -c providers/cloudflare/wrangler.toml",
-    "deploy:staging": "wrangler deploy -c providers/cloudflare/wrangler.toml --env staging",
-    "deploy:prod": "wrangler deploy -c providers/cloudflare/wrangler.toml --env production"
+    "deploy": "npm run build && wrangler deploy -c providers/cloudflare/wrangler.toml",
+    "deploy:staging": "npm run build && wrangler deploy -c providers/cloudflare/wrangler.toml --env staging",
+    "deploy:prod": "npm run build && wrangler deploy -c providers/cloudflare/wrangler.toml --env production"
   },
   "dependencies": {
     "hono": "^4.0.0",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "wrangler": "^3.0.0",
-    "@cloudflare/workers-types": "^5.0.0"
+    "@cloudflare/workers-types": "^5.0.0",
+    "esbuild": "^0.20.0"
   }
 }
