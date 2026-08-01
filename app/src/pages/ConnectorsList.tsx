@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
 
@@ -80,7 +81,7 @@ export function ConnectorsList() {
       {loading ? (
         <Card>
           <CardContent className="py-10 text-center">
-            Loading...
+            <Spin size="large" />
           </CardContent>
         </Card>
       ) : connectors.length === 0 ? (

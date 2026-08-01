@@ -1,57 +1,193 @@
-import { Create, useForm } from '@refinedev/antd';
-import { Form, Input, Select, Switch } from 'antd';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Button, Select } from 'antd';
+import { message } from 'antd';
+import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+interface FormErrors {
+  name?: string;
+  trigger_type?: string;
+}
+
 export function RulesCreate() {
   const navigate = useNavigate();
-  const { formProps } = useForm({
-    resource: 'rules',
-    action: 'create',
-    redirect: false,
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [formData, setFormData] = useState({
+    name: '',
+    condition_logic: 'and',
+    trigger_type: '',
+    enabled: true,
   });
 
-  const handleFinish = async (values: any) => {
-    const token = localStorage.getItem('auth_token');
-    await fetch(`${API_URL}/rules`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(values),
-    });
-    navigate('/rules');
+  const validate = (): boolean => {
+    const newErrors: FormErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Rule name is required';
+    }
+    
+    if (!formData.trigger_type) {
+      newErrors.trigger_type = 'Trigger type is required';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validate()) {
+      message.error('Please fix the errors above');
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${API_URL}/rules`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          condition_logic: formData.condition_logic,
+          trigger_type: formData.trigger_type,
+          enabled: formData.enabled,
+          conditions: [],
+          triggers: [],
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        message.success('Rule created successfully');
+        navigate('/rules');
+      } else {
+        message.error(data.error?.message || 'Failed to create rule');
+      }
+    } catch (error) {
+      message.error('Failed to create rule');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerTypes = [
+    { value: 'trade', label: 'Trade' },
+    { value: 'notify', label: 'Notify' },
+    { value: 'adjust_risk', label: 'Adjust Risk' },
+    { value: 'webhook', label: 'Webhook' },
+  ];
+
   return (
-    <Create>
-      <Form {...formProps} onFinish={handleFinish} layout="vertical">
-        <Form.Item label="Name" name="name" rules={[{ required: true }]}>
-          <Input />
-        </Form.Item>
-        
-        <Form.Item label="Condition Logic" name="condition_logic">
-          <Select>
-            <Select.Option value="and">AND</Select.Option>
-            <Select.Option value="or">OR</Select.Option>
-          </Select>
-        </Form.Item>
-        
-        <Form.Item label="Trigger Type" name="trigger_type">
-          <Select placeholder="Select trigger type">
-            <Select.Option value="trade">Trade</Select.Option>
-            <Select.Option value="notify">Notify</Select.Option>
-            <Select.Option value="adjust_risk">Adjust Risk</Select.Option>
-          </Select>
-        </Form.Item>
-        
-        <Form.Item label="Enabled" name="enabled" valuePropName="checked">
-          <Switch />
-        </Form.Item>
-      </Form>
-    </Create>
+    <div className="space-y-6 max-w-2xl">
+      <div className="flex items-center gap-4">
+        <Button 
+          type="text" 
+          icon={<ArrowLeftOutlined />} 
+          onClick={() => navigate('/rules')}
+        >
+          Back
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold">Create Rule</h1>
+          <p className="text-muted-foreground">
+            Create a new trading rule
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Rule Details</CardTitle>
+            <CardDescription>
+              Configure your trading rule conditions and triggers
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name *</Label>
+              <Input
+                id="name"
+                placeholder="My Trading Rule"
+                value={formData.name}
+                onChange={(e) => {
+                  setFormData({ ...formData, name: e.target.value });
+                  if (errors.name) setErrors({ ...errors, name: undefined });
+                }}
+                className={errors.name ? 'border-red-500' : undefined}
+              />
+              {errors.name && (
+                <p className="text-sm text-red-500">{errors.name}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="condition_logic">Condition Logic</Label>
+              <Select
+                id="condition_logic"
+                className="w-full"
+                value={formData.condition_logic}
+                onChange={(value) => setFormData({ ...formData, condition_logic: value })}
+                options={[
+                  { value: 'and', label: 'AND (all conditions must match)' },
+                  { value: 'or', label: 'OR (any condition must match)' },
+                ]}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="trigger_type">Trigger Type *</Label>
+              <Select
+                id="trigger_type"
+                className={`w-full ${errors.trigger_type ? 'border-red-500' : ''}`}
+                placeholder="Select trigger type"
+                value={formData.trigger_type || undefined}
+                onChange={(value) => {
+                  setFormData({ ...formData, trigger_type: value });
+                  if (errors.trigger_type) setErrors({ ...errors, trigger_type: undefined });
+                }}
+                options={triggerTypes}
+              />
+              {errors.trigger_type && (
+                <p className="text-sm text-red-500">{errors.trigger_type}</p>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="enabled"
+                checked={formData.enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
+              />
+              <Label htmlFor="enabled">Enabled</Label>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={loading}>
+                Create Rule
+              </Button>
+              <Button variant="outlined" onClick={() => navigate('/rules')}>
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </form>
+    </div>
   );
 }
 
