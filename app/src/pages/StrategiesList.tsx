@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Spin, Select } from 'antd';
+import { Spin, Select, Checkbox } from 'antd';
 import { PlusOutlined, ThunderboltOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
 
@@ -23,6 +23,7 @@ export function StrategiesList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fetchStrategies = () => {
     fetch(`${API_URL}/strategies`, {
@@ -59,6 +60,25 @@ export function StrategiesList() {
     });
   }, [strategies, search, statusFilter]);
 
+  const allSelected = filteredStrategies.length > 0 && selectedIds.length === filteredStrategies.length;
+  const someSelected = selectedIds.length > 0 && selectedIds.length < filteredStrategies.length;
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredStrategies.map(s => s.id));
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
   const handleDelete = async (id: string, _name: string) => {
     try {
       const res = await fetch(`${API_URL}/strategies/${id}`, {
@@ -71,11 +91,62 @@ export function StrategiesList() {
       if (res.ok) {
         message.success('Strategy deleted');
         setStrategies(strategies.filter(s => s.id !== id));
+        setSelectedIds(prev => prev.filter(i => i !== id));
       } else {
         message.error('Failed to delete strategy');
       }
     } catch {
       message.error('Failed to delete strategy');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const results = await Promise.all(
+      selectedIds.map(async (id) => {
+        const res = await fetch(`${API_URL}/strategies/${id}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+          },
+        });
+        return res.ok;
+      })
+    );
+
+    const successCount = results.filter(r => r).length;
+    if (successCount > 0) {
+      message.success(`Deleted ${successCount} strategy(s)`);
+      setStrategies(strategies.filter(s => !selectedIds.includes(s.id)));
+      setSelectedIds([]);
+    } else {
+      message.error('Failed to delete strategies');
+    }
+  };
+
+  const handleBulkToggle = async (enable: boolean) => {
+    const results = await Promise.all(
+      selectedIds.map(async (id) => {
+        const res = await fetch(`${API_URL}/strategies/${id}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ enabled: enable }),
+        });
+        return res.ok;
+      })
+    );
+
+    const successCount = results.filter(r => r).length;
+    if (successCount > 0) {
+      message.success(`${enable ? 'Enabled' : 'Disabled'} ${successCount} strategy(s)`);
+      setStrategies(strategies.map(s => 
+        selectedIds.includes(s.id) ? { ...s, enabled: enable } : s
+      ));
+      setSelectedIds([]);
+    } else {
+      message.error('Failed to update strategies');
     }
   };
 
@@ -103,7 +174,6 @@ export function StrategiesList() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
-          
         />
         <Select
           placeholder="Status"
@@ -120,6 +190,49 @@ export function StrategiesList() {
           {filteredStrategies.length} of {strategies.length} strategies
         </span>
       </div>
+
+      {/* Bulk Actions */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected}
+            onChange={handleSelectAll}
+          />
+          <span className="text-sm">
+            {selectedIds.length} selected
+          </span>
+          <Button 
+            variant="default" 
+            size="sm" 
+            onClick={() => handleBulkToggle(true)}
+          >
+            Enable Selected
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => handleBulkToggle(false)}
+          >
+            Disable Selected
+          </Button>
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={handleBulkDelete}
+          >
+            <DeleteOutlined className="mr-2" />
+            Delete Selected
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setSelectedIds([])}
+          >
+            Clear Selection
+          </Button>
+        </div>
+      )}
 
       {loading ? (
         <Card>
@@ -148,9 +261,15 @@ export function StrategiesList() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredStrategies.map((strategy) => (
-            <Card key={strategy.id}>
+            <Card key={strategy.id} className={selectedIds.includes(strategy.id) ? 'ring-2 ring-primary' : ''}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg">{strategy.name}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedIds.includes(strategy.id)}
+                    onChange={() => handleSelectOne(strategy.id)}
+                  />
+                  <CardTitle className="text-lg">{strategy.name}</CardTitle>
+                </div>
                 <span className={`text-xs px-2 py-1 rounded ${
                   strategy.enabled 
                     ? 'bg-green-100 text-green-800' 

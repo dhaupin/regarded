@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Spin, Select } from 'antd';
+import { Spin, Select, Checkbox } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
 
@@ -24,6 +24,7 @@ export function ConnectorsList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modeFilter, setModeFilter] = useState<string>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fetchConnectors = () => {
     fetch(`${API_URL}/connectors`, {
@@ -47,16 +48,13 @@ export function ConnectorsList() {
 
   const filteredConnectors = useMemo(() => {
     return connectors.filter(connector => {
-      // Search filter
       const searchLower = search.toLowerCase();
       const matchesSearch = !search || 
         connector.label.toLowerCase().includes(searchLower) ||
         connector.exchange.toLowerCase().includes(searchLower);
       
-      // Status filter
       const matchesStatus = statusFilter === 'all' || connector.status === statusFilter;
       
-      // Mode filter (paper vs live)
       const matchesMode = modeFilter === 'all' || 
         (modeFilter === 'paper' && connector.paper) ||
         (modeFilter === 'live' && !connector.paper);
@@ -64,6 +62,25 @@ export function ConnectorsList() {
       return matchesSearch && matchesStatus && matchesMode;
     });
   }, [connectors, search, statusFilter, modeFilter]);
+
+  const allSelected = filteredConnectors.length > 0 && selectedIds.length === filteredConnectors.length;
+  const someSelected = selectedIds.length > 0 && selectedIds.length < filteredConnectors.length;
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredConnectors.map(c => c.id));
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -77,11 +94,35 @@ export function ConnectorsList() {
       if (res.ok) {
         message.success('Connector deleted');
         setConnectors(connectors.filter(c => c.id !== id));
+        setSelectedIds(prev => prev.filter(i => i !== id));
       } else {
         message.error('Failed to delete connector');
       }
     } catch {
       message.error('Failed to delete connector');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const results = await Promise.all(
+      selectedIds.map(async (id) => {
+        const res = await fetch(`${API_URL}/connectors/${id}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+          },
+        });
+        return res.ok;
+      })
+    );
+
+    const successCount = results.filter(r => r).length;
+    if (successCount > 0) {
+      message.success(`Deleted ${successCount} connector(s)`);
+      setConnectors(connectors.filter(c => !selectedIds.includes(c.id)));
+      setSelectedIds([]);
+    } else {
+      message.error('Failed to delete connectors');
     }
   };
 
@@ -109,7 +150,6 @@ export function ConnectorsList() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
-          
         />
         <Select
           placeholder="Status"
@@ -138,6 +178,35 @@ export function ConnectorsList() {
         </span>
       </div>
 
+      {/* Bulk Actions */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected}
+            onChange={handleSelectAll}
+          />
+          <span className="text-sm">
+            {selectedIds.length} selected
+          </span>
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={handleBulkDelete}
+          >
+            <DeleteOutlined className="mr-2" />
+            Delete Selected
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setSelectedIds([])}
+          >
+            Clear Selection
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <Card>
           <CardContent className="py-10 text-center">
@@ -165,9 +234,15 @@ export function ConnectorsList() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredConnectors.map((connector) => (
-            <Card key={connector.id}>
+            <Card key={connector.id} className={selectedIds.includes(connector.id) ? 'ring-2 ring-primary' : ''}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg">{connector.exchange}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedIds.includes(connector.id)}
+                    onChange={() => handleSelectOne(connector.id)}
+                  />
+                  <CardTitle className="text-lg">{connector.exchange}</CardTitle>
+                </div>
                 <span className={`text-xs px-2 py-1 rounded ${
                   connector.status === 'connected' 
                     ? 'bg-green-100 text-green-800' 

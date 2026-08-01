@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Spin, Select } from 'antd';
+import { Spin, Select, Checkbox } from 'antd';
 import { PlusOutlined, FileProtectOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
 
@@ -24,6 +24,7 @@ export function RulesList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fetchRules = () => {
     fetch(`${API_URL}/rules`, {
@@ -60,6 +61,25 @@ export function RulesList() {
     });
   }, [rules, search, statusFilter]);
 
+  const allSelected = filteredRules.length > 0 && selectedIds.length === filteredRules.length;
+  const someSelected = selectedIds.length > 0 && selectedIds.length < filteredRules.length;
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredRules.map(r => r.id));
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
   const handleDelete = async (id: string, _name: string) => {
     try {
       const res = await fetch(`${API_URL}/rules/${id}`, {
@@ -72,11 +92,62 @@ export function RulesList() {
       if (res.ok) {
         message.success('Rule deleted');
         setRules(rules.filter(r => r.id !== id));
+        setSelectedIds(prev => prev.filter(i => i !== id));
       } else {
         message.error('Failed to delete rule');
       }
     } catch {
       message.error('Failed to delete rule');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const results = await Promise.all(
+      selectedIds.map(async (id) => {
+        const res = await fetch(`${API_URL}/rules/${id}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+          },
+        });
+        return res.ok;
+      })
+    );
+
+    const successCount = results.filter(r => r).length;
+    if (successCount > 0) {
+      message.success(`Deleted ${successCount} rule(s)`);
+      setRules(rules.filter(r => !selectedIds.includes(r.id)));
+      setSelectedIds([]);
+    } else {
+      message.error('Failed to delete rules');
+    }
+  };
+
+  const handleBulkToggle = async (enable: boolean) => {
+    const results = await Promise.all(
+      selectedIds.map(async (id) => {
+        const res = await fetch(`${API_URL}/rules/${id}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ enabled: enable }),
+        });
+        return res.ok;
+      })
+    );
+
+    const successCount = results.filter(r => r).length;
+    if (successCount > 0) {
+      message.success(`${enable ? 'Enabled' : 'Disabled'} ${successCount} rule(s)`);
+      setRules(rules.map(r => 
+        selectedIds.includes(r.id) ? { ...r, enabled: enable } : r
+      ));
+      setSelectedIds([]);
+    } else {
+      message.error('Failed to update rules');
     }
   };
 
@@ -104,7 +175,6 @@ export function RulesList() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
-          
         />
         <Select
           placeholder="Status"
@@ -121,6 +191,49 @@ export function RulesList() {
           {filteredRules.length} of {rules.length} rules
         </span>
       </div>
+
+      {/* Bulk Actions */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected}
+            onChange={handleSelectAll}
+          />
+          <span className="text-sm">
+            {selectedIds.length} selected
+          </span>
+          <Button 
+            variant="default" 
+            size="sm" 
+            onClick={() => handleBulkToggle(true)}
+          >
+            Enable Selected
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => handleBulkToggle(false)}
+          >
+            Disable Selected
+          </Button>
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={handleBulkDelete}
+          >
+            <DeleteOutlined className="mr-2" />
+            Delete Selected
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setSelectedIds([])}
+          >
+            Clear Selection
+          </Button>
+        </div>
+      )}
 
       {loading ? (
         <Card>
@@ -149,9 +262,15 @@ export function RulesList() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredRules.map((rule) => (
-            <Card key={rule.id}>
+            <Card key={rule.id} className={selectedIds.includes(rule.id) ? 'ring-2 ring-primary' : ''}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg">{rule.name}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedIds.includes(rule.id)}
+                    onChange={() => handleSelectOne(rule.id)}
+                  />
+                  <CardTitle className="text-lg">{rule.name}</CardTitle>
+                </div>
                 <span className={`text-xs px-2 py-1 rounded ${
                   rule.enabled 
                     ? 'bg-green-100 text-green-800' 
