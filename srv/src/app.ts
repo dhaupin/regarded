@@ -14,7 +14,7 @@ import type { Context } from 'hono';
 // Import routes
 import { authRoutes } from './routes/auth';
 import { apiRoutes } from './routes/api';
-// import { webhookRoutes } from './routes/webhooks';
+import { webhookRoutes } from './routes/webhooks';
 
 // ============================================================================
 // App

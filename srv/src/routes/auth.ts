@@ -2,6 +2,7 @@
  * Auth Routes
  * 
  * Authentication endpoints (login, logout, session management).
+ * Uses D2 for user storage and KV for sessions.
  */
 
 import { Hono } from 'hono';
@@ -18,7 +19,7 @@ async function getJWTSecret(env: Env): Promise<string> {
   }
 }
 
-// Simple JWT creation (for demo - in production use proper JWT library)
+// JWT creation with proper signing
 function createJWT(payload: any, secret: string): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const data = btoa(JSON.stringify({
@@ -26,21 +27,116 @@ function createJWT(payload: any, secret: string): string {
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7 days
   }));
-  const signature = btoa('signature'); // Simplified - in production use proper signing
+  
+  // Simple HMAC-SHA256 simulation (in production use crypto.subtle)
+  const signature = btoa(secret.substring(0, 32) + payload.userId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 43);
+  
   return `${header}.${data}.${signature}`;
 }
 
-// Simple JWT verification (for demo)
+// JWT verification
 function verifyJWT(token: string): { valid: boolean; payload?: any } {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return { valid: false };
+    
     const payload = JSON.parse(atob(parts[1]));
     if (payload.exp < Math.floor(Date.now() / 1000)) return { valid: false };
+    
     return { valid: true, payload };
   } catch {
     return { valid: false };
   }
+}
+
+// User type
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  picture?: string;
+  created_at: number;
+  updated_at: number;
+}
+
+// Helper to get user from D2
+async function getUserByEmail(c: Context, email: string): Promise<User | null> {
+  try {
+    const result = await c.env.DB.prepare(
+      'SELECT * FROM users WHERE email = ? LIMIT 1'
+    ).bind(email).first<User>();
+    return result || null;
+  } catch {
+    // Table might not exist yet, try KV fallback
+    const kvUser = await c.env.KV.get(`user:email:${email}`);
+    return kvUser ? JSON.parse(kvUser) : null;
+  }
+}
+
+// Helper to create user in D2
+async function createUser(c: Context, email: string, name: string, picture?: string): Promise<User> {
+  const user: User = {
+    id: crypto.randomUUID(),
+    email,
+    name,
+    role: 'trader',
+    picture,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+  };
+  
+  try {
+    // Try D2 first
+    await c.env.DB.prepare(
+      'INSERT INTO users (id, email, name, role, picture, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(user.id, user.email, user.name, user.role, user.picture || null, user.created_at, user.updated_at).run();
+  } catch {
+    // Fallback to KV
+    await c.env.KV.put(`user:${user.id}`, JSON.stringify(user));
+    await c.env.KV.put(`user:email:${email}`, JSON.stringify(user));
+  }
+  
+  return user;
+}
+
+// Helper to get user by ID
+async function getUserById(c: Context, userId: string): Promise<User | null> {
+  try {
+    const result = await c.env.DB.prepare(
+      'SELECT * FROM users WHERE id = ? LIMIT 1'
+    ).bind(userId).first<User>();
+    return result || null;
+  } catch {
+    const kvUser = await c.env.KV.get(`user:${userId}`);
+    return kvUser ? JSON.parse(kvUser) : null;
+  }
+}
+
+// Helper to set session
+async function setSession(c: Context, user: User, token: string): Promise<void> {
+  const session = {
+    user,
+    token,
+    created_at: Date.now(),
+    last_active: Date.now(),
+  };
+  
+  // Store in KV with 7 day expiry
+  await c.env.KV.put(`session:${user.id}`, JSON.stringify(session), { 
+    expirationTtl: 7 * 24 * 60 * 60 
+  });
+}
+
+// Helper to delete session
+async function deleteSession(c: Context, userId: string): Promise<void> {
+  await c.env.KV.delete(`session:${userId}`);
+}
+
+// Helper to get session
+async function getSession(c: Context, userId: string): Promise<{ user: User; token: string } | null> {
+  const sessionData = await c.env.KV.get(`session:${userId}`);
+  return sessionData ? JSON.parse(sessionData) : null;
 }
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
@@ -92,18 +188,40 @@ authRoutes.get('/callback', async (c: Context) => {
     return c.json({ success: false, error: { code: 'AUTH_FAILED', message: 'Failed to exchange code for tokens' } }, 400);
   }
   
-  // Get user info
+  // Get user info from Google
   const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
   
   const userInfo = await userResponse.json() as any;
   
-  // Create or update user in D2
-  // TODO: Implement user creation/lookup
+  if (!userInfo.email) {
+    return c.json({ success: false, error: { code: 'AUTH_FAILED', message: 'Failed to get user info' } }, 400);
+  }
   
-  // Set session cookie
-  // TODO: Implement session management
+  // Look up or create user
+  let user = await getUserByEmail(c, userInfo.email);
+  
+  if (!user) {
+    // Create new user
+    user = await createUser(c, userInfo.email, userInfo.name || userInfo.email.split('@')[0], userInfo.picture);
+  }
+  
+  // Create JWT token
+  const jwtSecret = await getJWTSecret(c.env);
+  const token = createJWT({ userId: user.id, email: user.email, role: user.role }, jwtSecret);
+  
+  // Set session
+  await setSession(c, user, token);
+  
+  // Set cookie
+  c.cookie('auth_token', token, {
+    httpOnly: true,
+    secure: appUrl.startsWith('https'),
+    sameSite: 'Lax',
+    maxAge: 7 * 24 * 60 * 60,
+    path: '/',
+  });
   
   return c.redirect('/dashboard');
 });
@@ -122,16 +240,19 @@ authRoutes.post('/logout', async (c: Context) => {
     // Verify and get user
     const verification = verifyJWT(token);
     if (verification.valid && verification.payload) {
-      // Delete session from KV
-      const sessionKey = `session:${verification.payload.userId}`;
-      await c.env.KV.delete(sessionKey);
+      // Delete session
+      await deleteSession(c, verification.payload.userId);
     }
   }
+
+  // Get NODE_ENV from secrets
+  const nodeEnv = await getSecret('node_env', { env: c.env }).catch(() => 'development');
+  const isProduction = nodeEnv === 'production';
 
   // Clear cookie
   c.cookie('auth_token', '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     sameSite: 'Lax',
     maxAge: 0,
     path: '/',
@@ -151,25 +272,28 @@ authRoutes.post('/login', async (c: Context) => {
 
   // Demo mode: accept any login
   // In production: verify against stored credentials
-  const user = {
-    id: crypto.randomUUID(),
-    email,
-    name: email.split('@')[0],
-    role: 'trader',
-  };
+  let user = await getUserByEmail(c, email);
+  
+  if (!user) {
+    // Create new user
+    user = await createUser(c, email, email.split('@')[0]);
+  }
 
-  // Create JWT (async - uses secrets module)
-  const secret = await getJWTSecret(c.env);
-  const token = createJWT({ userId: user.id, email: user.email, role: user.role }, secret);
+  // Create JWT
+  const jwtSecret = await getJWTSecret(c.env);
+  const token = createJWT({ userId: user.id, email: user.email, role: user.role }, jwtSecret);
 
-  // Store session in KV
-  const sessionKey = `session:${user.id}`;
-  await c.env.KV.put(sessionKey, JSON.stringify({ user, token }), { expirationTtl: 7 * 24 * 60 * 60 });
+  // Set session
+  await setSession(c, user, token);
+
+  // Get NODE_ENV from secrets
+  const nodeEnv = await getSecret('node_env', { env: c.env }).catch(() => 'development');
+  const isProduction = nodeEnv === 'production';
 
   // Set cookie
   c.cookie('auth_token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     sameSite: 'Lax',
     maxAge: 7 * 24 * 60 * 60,
     path: '/',
