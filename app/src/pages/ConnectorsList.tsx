@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined } from '@ant-design/icons';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { message } from 'antd';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -18,7 +20,7 @@ export function ConnectorsList() {
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchConnectors = () => {
     fetch(`${API_URL}/connectors`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
@@ -32,7 +34,31 @@ export function ConnectorsList() {
       .catch(() => {
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchConnectors();
   }, []);
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/connectors/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+      });
+      
+      if (res.ok) {
+        message.success('Connector deleted');
+        setConnectors(connectors.filter(c => c.id !== id));
+      } else {
+        message.error('Failed to delete connector');
+      }
+    } catch {
+      message.error('Failed to delete connector');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -94,9 +120,36 @@ export function ConnectorsList() {
                       <EditOutlined />
                     </Button>
                   </Link>
-                  <Button variant="outline" size="sm" className="text-destructive">
-                    <DeleteOutlined />
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-destructive">
+                        <DeleteOutlined />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>
+                          <ExclamationCircleOutlined style={{ marginRight: 8 }} />
+                          Delete Connector
+                        </DialogTitle>
+                        <DialogDescription>
+                          Are you sure you want to delete "{connector.label || connector.exchange}"? 
+                          This action cannot be undone.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => {}}>
+                          Cancel
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          onClick={() => handleDelete(connector.id)}
+                        >
+                          Delete
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </CardContent>
             </Card>

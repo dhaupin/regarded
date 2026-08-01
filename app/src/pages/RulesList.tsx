@@ -1,9 +1,65 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusOutlined, FileProtectOutlined } from '@ant-design/icons';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { PlusOutlined, FileProtectOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { message } from 'antd';
+
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+interface Rule {
+  id: string;
+  name: string;
+  condition_logic: string;
+  enabled: boolean;
+  conditions?: unknown[];
+}
 
 export function RulesList() {
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchRules = () => {
+    fetch(`${API_URL}/rules`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setRules(data.data?.items || []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchRules();
+  }, []);
+
+  const handleDelete = async (id: string, _name: string) => {
+    try {
+      const res = await fetch(`${API_URL}/rules/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+      });
+      
+      if (res.ok) {
+        message.success('Rule deleted');
+        setRules(rules.filter(r => r.id !== id));
+      } else {
+        message.error('Failed to delete rule');
+      }
+    } catch {
+      message.error('Failed to delete rule');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -21,49 +77,87 @@ export function RulesList() {
         </Link>
       </div>
 
-      <Card>
-        <CardContent className="py-10 text-center">
-          <FileProtectOutlined className="h-12 w-12 text-muted-foreground mb-4" />
-          <p className="text-muted-foreground">No rules configured</p>
-          <Link to="/rules/create">
-            <Button variant="outline" className="mt-4">
-              Create your first rule
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-export function RulesCreate() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Create Rule</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Rule Configuration</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Rule form coming soon...</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-export function RulesEdit() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Edit Rule</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Rule Configuration</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Rule form coming soon...</p>
-        </CardContent>
-      </Card>
+      {loading ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            Loading...
+          </CardContent>
+        </Card>
+      ) : rules.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <FileProtectOutlined className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No rules configured</p>
+            <Link to="/rules/create">
+              <Button variant="outline" className="mt-4">
+                Create your first rule
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {rules.map((rule) => (
+            <Card key={rule.id}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg">{rule.name}</CardTitle>
+                <span className={`text-xs px-2 py-1 rounded ${
+                  rule.enabled 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {rule.enabled ? 'Active' : 'Disabled'}
+                </span>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Logic: {rule.condition_logic || 'and'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Conditions: {rule.conditions?.length || 0}
+                </p>
+                <div className="flex gap-2 mt-4">
+                  <Link to={`/rules/${rule.id}`}>
+                    <Button variant="outline" size="sm">
+                      <EditOutlined />
+                    </Button>
+                  </Link>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-destructive">
+                        <DeleteOutlined />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>
+                          <ExclamationCircleOutlined style={{ marginRight: 8 }} />
+                          Delete Rule
+                        </DialogTitle>
+                        <DialogDescription>
+                          Are you sure you want to delete "{rule.name}"? 
+                          This action cannot be undone.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => {}}>
+                          Cancel
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          onClick={() => handleDelete(rule.id, rule.name)}
+                        >
+                          Delete
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
