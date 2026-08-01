@@ -9,6 +9,7 @@ import { KrakenConnector } from './connectors/kraken';
 import { SolanaConnector } from './connectors/solana';
 import { JupiterConnector } from './connectors/jupiter';
 import { BinanceConnector } from './connectors/binance';
+import { CoinbaseConnector } from './connectors/coinbase';
 import { EventEmitter } from './event';
 import { logAuditEvent } from './audit';
 
@@ -18,6 +19,7 @@ export { KrakenConnector } from './connectors/kraken';
 export { SolanaConnector } from './connectors/solana';
 export { JupiterConnector } from './connectors/jupiter';
 export { BinanceConnector } from './connectors/binance';
+export { CoinbaseConnector } from './connectors/coinbase';
 
 // Re-export types
 export type { ConnectorConfig, ConnectorStatus } from './connectors/base';
@@ -68,6 +70,7 @@ export class ConnectorRegistry {
     this.register('solana', SolanaConnector);
     this.register('jupiter', JupiterConnector);
     this.register('binance', BinanceConnector);
+    this.register('coinbase', CoinbaseConnector);
   }
   
   register(exchange: string, cls: new (config?: import('./connectors/base').ConnectorConfig) => ExchangeConnector): void {
