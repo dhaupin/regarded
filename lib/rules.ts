@@ -19,6 +19,7 @@ import {
   TradingSession 
 } from './psy';
 import { type Storage, createJSONStorage } from './storage';
+import { getAdapter, type BaseAdapter } from './adapters';
 
 export interface RulesEvents {
   'rule:triggered': { ruleName: string; context: any };
@@ -28,6 +29,12 @@ export interface RulesEvents {
 
 export interface RulesEngineConfig {
   maxChainDepth: number;
+  /** Notification adapter name to use for rule notifications */
+  notifyAdapter?: string;
+  /** Whether to send notifications on rule trigger */
+  notifyOnTrigger?: boolean;
+  /** Whether to send notifications on rule violation */
+  notifyOnViolation?: boolean;
 }
 
 export interface ConditionContext {
@@ -48,7 +55,12 @@ export class RulesEngine extends EventEmitter<RulesEvents> {
   
   constructor(config: Partial<RulesEngineConfig> = {}, storage?: Storage) {
     super();
-    this.config = { maxChainDepth: config.maxChainDepth ?? 5 };
+    this.config = { 
+      maxChainDepth: config.maxChainDepth ?? 5,
+      notifyAdapter: config.notifyAdapter,
+      notifyOnTrigger: config.notifyOnTrigger ?? false,
+      notifyOnViolation: config.notifyOnViolation ?? false,
+    };
     this.state = this.createInitialState();
     this.storage = storage;
   }
@@ -58,6 +70,43 @@ export class RulesEngine extends EventEmitter<RulesEvents> {
    */
   private getStorageKey(): string {
     return 'rules:engine-state';
+  }
+
+  /**
+   * Send notification via adapter
+   */
+  private async sendNotification(message: string): Promise<void> {
+    const adapterName = this.config.notifyAdapter;
+    if (!adapterName) return;
+    
+    const adapter = getAdapter(adapterName);
+    if (!adapter) return;
+    
+    try {
+      await adapter.send(message);
+    } catch (e) {
+      console.warn('Failed to send rule notification:', e);
+    }
+  }
+
+  /**
+   * Notify on rule trigger
+   */
+  async notifyTrigger(ruleName: string, context: any): Promise<void> {
+    if (!this.config.notifyOnTrigger) return;
+    
+    const message = `Rule triggered: ${ruleName}`;
+    await this.sendNotification(message);
+  }
+
+  /**
+   * Notify on rule violation
+   */
+  async notifyViolation(ruleName: string, reason: string): Promise<void> {
+    if (!this.config.notifyOnViolation) return;
+    
+    const message = `Rule violated: ${ruleName} - ${reason}`;
+    await this.sendNotification(message);
   }
 
   /**

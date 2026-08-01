@@ -1,0 +1,15 @@
+export { Login } from './Login';
+export { Dashboard } from './Dashboard';
+export { ConnectorsList } from './ConnectorsList';
+export { ConnectorsCreate } from './ConnectorsCreate';
+export { ConnectorsEdit } from './ConnectorsEdit';
+export { StrategiesList } from './StrategiesList';
+export { StrategiesCreate } from './StrategiesCreate';
+export { StrategiesEdit } from './StrategiesEdit';
+export { RulesList } from './RulesList';
+export { RulesCreate } from './RulesCreate';
+export { RulesEdit } from './RulesEdit';
+export { TradesList } from './TradesList';
+export { PositionsList } from './PositionsList';
+export { Settings } from './Settings';
+export { DebugPage } from './debug/DebugPage';

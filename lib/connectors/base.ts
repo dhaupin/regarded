@@ -26,7 +26,31 @@ import {
 } from '../rules';
 import { parsePair } from '../utils';
 
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface ConnectorConfig {
+  /** Whether connector is enabled */
+  enabled?: boolean;
+  /** Default paper mode setting */
+  paperMode?: boolean;
+  /** Custom name/label */
+  label?: string;
+}
+
+export interface ConnectorStatus {
+  connected: boolean;
+  exchange: string;
+  name: string;
+  paperMode: boolean;
+  supportedSymbols: string[];
+  supportedIntervals: string[];
+}
+
 export interface ConnectorEvents {
+  'connector:connected': { exchange: string; name: string };
+  'connector:disconnected': { exchange: string; name: string };
   'connector:order-placed': { orderId: string; exchange: string; symbol: string; side: string; amount: number };
   'connector:order-filled': { orderId: string; exchange: string; symbol: string; filledAmount: number; price: number };
   'connector:order-cancelled': { orderId: string; exchange: string; symbol: string };
@@ -40,13 +64,22 @@ export abstract class BaseConnector extends EventEmitter<ConnectorEvents> implem
   abstract name: string;
   abstract exchange: string;
   protected connected: boolean = false;
+  protected enabled: boolean = true;
   protected paperMode: boolean = true;
+  protected config: ConnectorConfig;
   protected validator: RulesValidator;
   protected dailyTradeCount: number = 0;
   protected dailyLoss: number = 0;
   
-  constructor() {
+  constructor(config: ConnectorConfig = {}) {
     super();
+    this.config = {
+      enabled: config.enabled ?? true,
+      paperMode: config.paperMode ?? true,
+      label: config.label,
+    };
+    this.paperMode = this.config.paperMode ?? true;
+    
     // Default validator with global rules
     this.validator = createRulesValidator({
       globalPreRules: defaultPreRules,
@@ -164,6 +197,71 @@ export abstract class BaseConnector extends EventEmitter<ConnectorEvents> implem
   
   isPaperMode(): boolean {
     return this.paperMode;
+  }
+  
+  /**
+   * Get connector status (implements Adapter pattern)
+   */
+  status(): ConnectorStatus {
+    return {
+      connected: this.connected,
+      exchange: this.exchange,
+      name: this.name,
+      paperMode: this.paperMode,
+      supportedSymbols: this.supportedSymbols(),
+      supportedIntervals: this.supportedIntervals(),
+    };
+  }
+  
+  /**
+   * Test connection (implements Adapter pattern)
+   */
+  async ping(): Promise<boolean> {
+    if (!this.enabled) return false;
+    try {
+      await this.getBalance();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  
+  /**
+   * Enable connector
+   */
+  enable(): void {
+    this.enabled = true;
+  }
+  
+  /**
+   * Disable connector
+   */
+  disable(): void {
+    this.enabled = false;
+  }
+  
+  /**
+   * Check if connector is ready
+   */
+  isReady(): boolean {
+    return this.connected && this.enabled;
+  }
+  
+  /**
+   * Get config
+   */
+  getConfig(): ConnectorConfig {
+    return { ...this.config };
+  }
+  
+  /**
+   * Update config
+   */
+  updateConfig(config: Partial<ConnectorConfig>): void {
+    this.config = { ...this.config, ...config };
+    if (config.paperMode !== undefined) {
+      this.paperMode = config.paperMode;
+    }
   }
   
   abstract supportedIntervals(): CandleInterval[];

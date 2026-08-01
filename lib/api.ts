@@ -5,7 +5,7 @@
  * Used by the web app backend.
  */
 
-import { Request, Response } from '@cloudflare/workers-types';
+// Use global Response (available in Node.js 18+ and Workers)
 
 // ============================================================================
 // Request/Response Types

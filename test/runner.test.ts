@@ -21,7 +21,7 @@ class MockConnector extends BaseConnector {
   name = 'mock';
   exchange = 'mock';
   private _connected = false;
-  private _balance: Balance[] = [{ asset: 'USD', available: 10000, locked: 0 }];
+  private _balance: Balance[] = [{ asset: 'USD', free: 10000, locked: 0, total: 10000 }];
   private _price = 50000;
   private _candles: Candle[] = [];
   

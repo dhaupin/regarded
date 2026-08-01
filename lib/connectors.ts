@@ -8,6 +8,8 @@ import type { ExchangeConnector } from './types';
 import { KrakenConnector } from './connectors/kraken';
 import { SolanaConnector } from './connectors/solana';
 import { JupiterConnector } from './connectors/jupiter';
+import { BinanceConnector } from './connectors/binance';
+import { CoinbaseConnector } from './connectors/coinbase';
 import { EventEmitter } from './event';
 import { logAuditEvent } from './audit';
 
@@ -16,6 +18,11 @@ export { BaseConnector } from './connectors/base';
 export { KrakenConnector } from './connectors/kraken';
 export { SolanaConnector } from './connectors/solana';
 export { JupiterConnector } from './connectors/jupiter';
+export { BinanceConnector } from './connectors/binance';
+export { CoinbaseConnector } from './connectors/coinbase';
+
+// Re-export types
+export type { ConnectorConfig, ConnectorStatus } from './connectors/base';
 
 // Re-export validation types
 export { 
@@ -41,6 +48,8 @@ export {
 } from './rules';
 
 export interface ConnectorEvents {
+  'connector:connected': { exchange: string; name: string };
+  'connector:disconnected': { exchange: string; name: string };
   'connector:order-placed': { orderId: string; exchange: string; symbol: string; side: string; amount: number };
   'connector:order-filled': { orderId: string; exchange: string; symbol: string; filledAmount: number; price: number };
   'connector:order-cancelled': { orderId: string; exchange: string; symbol: string };
@@ -54,38 +63,62 @@ export interface ConnectorEvents {
  * Connector Registry
  */
 export class ConnectorRegistry {
-  private connectors = new Map<string, new () => ExchangeConnector>();
+  private connectorMap = new Map<string, new (config?: import('./connectors/base').ConnectorConfig) => ExchangeConnector>();
   
   constructor() {
     this.register('kraken', KrakenConnector);
     this.register('solana', SolanaConnector);
     this.register('jupiter', JupiterConnector);
+    this.register('binance', BinanceConnector);
+    this.register('coinbase', CoinbaseConnector);
   }
   
-  register(exchange: string, cls: new () => ExchangeConnector): void {
-    this.connectors.set(exchange.toLowerCase(), cls);
+  register(exchange: string, cls: new (config?: import('./connectors/base').ConnectorConfig) => ExchangeConnector): void {
+    this.connectorMap.set(exchange.toLowerCase(), cls);
   }
   
-  get(exchange: string): (new () => ExchangeConnector) | undefined {
-    return this.connectors.get(exchange.toLowerCase());
+  get(exchange: string): (new (config?: import('./connectors/base').ConnectorConfig) => ExchangeConnector) | undefined {
+    return this.connectorMap.get(exchange.toLowerCase());
   }
   
-  create(exchange: string): ExchangeConnector | undefined {
+  create(exchange: string, config?: import('./connectors/base').ConnectorConfig): ExchangeConnector | undefined {
     const cls = this.get(exchange);
-    return cls ? new cls() : undefined;
+    return cls ? new cls(config) : undefined;
   }
   
   has(exchange: string): boolean {
-    return this.connectors.has(exchange.toLowerCase());
+    return this.connectorMap.has(exchange.toLowerCase());
   }
   
   list(): string[] {
-    return Array.from(this.connectors.keys());
+    return Array.from(this.connectorMap.keys());
   }
 }
 
-export const connectors = new ConnectorRegistry();
+// Default registry instance
+export const connectorRegistry = new ConnectorRegistry();
 
-export function createConnector(exchange: string): ExchangeConnector | undefined {
-  return connectors.create(exchange);
+// Convenience functions (mirror adapters pattern)
+export function register(exchange: string, cls: new (config?: import('./connectors/base').ConnectorConfig) => ExchangeConnector): void {
+  connectorRegistry.register(exchange, cls);
 }
+
+export function get(exchange: string): (new (config?: import('./connectors/base').ConnectorConfig) => ExchangeConnector) | undefined {
+  return connectorRegistry.get(exchange);
+}
+
+export function has(exchange: string): boolean {
+  return connectorRegistry.has(exchange);
+}
+
+export function list(): string[] {
+  return connectorRegistry.list();
+}
+
+export function createConnector(exchange: string, config?: import('./connectors/base').ConnectorConfig): ExchangeConnector | undefined {
+  return connectorRegistry.create(exchange, config);
+}
+
+// Backwards compatibility - deprecated, use connectorRegistry
+/** @deprecated Use connectorRegistry instead */
+export const connectors = connectorRegistry;

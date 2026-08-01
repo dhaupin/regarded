@@ -1,0 +1,19 @@
+# Cloudflare Pages Redirects
+#
+# With prerendering, every route has its own dist/route/index.html.
+# CF Pages serves each route directly -- no rewrite rule needed.
+#
+# IMPORTANT: Do NOT add "/* /index.html 200" here with prerendering!
+# This causes an infinite redirect loop.
+
+# Custom redirects for your app
+# /old-path    /new-path    301
+# /docs       /docs/       301
+
+# Trailing slash redirects (optional - enable if preferred)
+/dashboard   /dashboard/   301
+/connectors /connectors/  301
+/strategies /strategies/ 301
+/rules       /rules/      301
+/trades     /trades/     301
+/settings   /settings/   301

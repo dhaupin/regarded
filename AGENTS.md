@@ -17,31 +17,53 @@ lib/
 ├── regarded.ts        # Main entry point
 ├── types.ts           # All TypeScript interfaces
 ├── error.ts           # Error codes, factory, utilities
-├── encrypt.ts        # AES-256-GCM, PBKDF2
-├── audit.ts          # Audit logging
-├── waf.ts            # WAF - rate limiting, IP blocking
-├── qos.ts            # QoS - circuit breaker, rate limiter
-├── network.ts        # HTTP client with retry, circuit breaker
+├── encrypt.ts         # AES-256-GCM, PBKDF2
+├── audit.ts           # Audit logging
+├── waf.ts             # WAF - rate limiting, IP blocking
+├── qos.ts             # QoS - circuit breaker, rate limiter
+├── network.ts         # HTTP client with retry, circuit breaker
 ├── scheduler.ts       # Cron scheduler, heartbeat
-├── auth.ts           # JWT, OAuth, sessions, lockout
+├── auth.ts            # JWT, OAuth, sessions, lockout
 ├── config.ts         # Config registry, secrets
-├── storage.ts       # KV cache, rate limiter
-├── cache.ts         # LRU cache with TTL
-├── event.ts         # Event emitter
-├── api.ts           # HTTP handlers, router, transforms
-├── indicators.ts    # RSI, KDJ, Bollinger, MACD
-├── patterns.ts      # Humps, divergence, etc.
-├── rules.ts         # Rules engine
-├── utils.ts         # Helper functions
-├── connectors.ts   # Factory & registry
-└── connectors/      # Individual connectors
-    ├── base.ts      # BaseConnector class
-    ├── kraken.ts    # Kraken exchange
-    ├── solana.ts    # Solana wallet
-    └── jupiter.ts   # Jupiter aggregator
+├── storage.ts        # KV cache, rate limiter
+├── cache.ts          # LRU cache with TTL
+├── event.ts          # Event emitter
+├── api.ts            # HTTP handlers, router, transforms
+├── indicators.ts     # RSI, KDJ, Bollinger, MACD
+├── patterns.ts       # Humps, divergence, etc.
+├── rules.ts          # Rules engine
+├── notify.ts         # Canonical notification handler (uses adapters)
+├── utils.ts          # Helper functions
+├── connectors.ts     # Factory & registry
+├── runner.ts         # TradingAgent execution engine
+├── portfolio.ts      # Position & portfolio management
+├── guard.ts          # Risk guardrails
+├── psy.ts            # Market psychology analysis
+├── connectors/       # Individual connectors
+│   ├── base.ts       # BaseConnector class
+│   ├── kraken.ts     # Kraken exchange
+│   ├── solana.ts     # Solana wallet
+│   └── jupiter.ts    # Jupiter aggregator
+└── adapters/         # Notification adapters
+    ├── base.ts       # BaseAdapter class, registry
+    ├── telegram.ts   # Telegram adapter
+    ├── discord.ts    # Discord adapter
+    ├── slack.ts      # Slack adapter
+    └── webhook.ts    # Generic webhook adapter
 
-dist/                 # Frontend build output (empty)
-test/                  # Test files (*.test.ts)
+srv/                  # Cloudflare Workers server
+├── src/
+│   ├── index.ts      # Hono app entry
+│   ├── env.ts        # Environment types
+│   └── routes/       # API route handlers
+│       ├── auth.ts   # Auth endpoints
+│       ├── api.ts    # Main API
+│       └── webhooks.ts # Webhook handlers
+├── migrations/       # D2 schema migrations
+└── wrangler.toml    # Workers config
+
+app/                  # Frontend placeholder (Vite/React)
+test/                 # Test files (*.test.ts)
 ```
 
 ### Quick Imports

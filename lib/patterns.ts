@@ -173,6 +173,129 @@ export class DoubleTopBottomPattern extends BasePattern {
 }
 
 /**
+ * Head and Shoulders Pattern
+ */
+export class HeadShouldersPattern extends BasePattern {
+  name = 'Head and Shoulders';
+  type = 'head_shoulders';
+  
+  detect(candles: Candle[], options?: PatternOptions): PatternResult {
+    const lookback = options?.lookback ?? 50;
+    const threshold = options?.threshold ?? 0.03;
+    
+    const highs = this.getHighs(candles);
+    if (lookback > highs.length) return { detected: false, confidence: 0 };
+    
+    const recent = highs.slice(-lookback);
+    
+    // Find peaks using local maxima
+    const peaks: number[] = [];
+    for (let i = 1; i < recent.length - 1; i++) {
+      if (recent[i] > recent[i - 1] && recent[i] > recent[i + 1]) {
+        peaks.push(recent[i]);
+      }
+    }
+    
+    if (peaks.length < 3) return { detected: false, confidence: 0 };
+    
+    // Get the last 3 peaks for head and shoulders
+    const lastThree = peaks.slice(-3);
+    const [leftShoulder, head, rightShoulder] = lastThree;
+    
+    // Head should be higher than both shoulders
+    if (head <= leftShoulder || head <= rightShoulder) {
+      return { detected: false, confidence: 0 };
+    }
+    
+    // Shoulders should be roughly equal (within threshold)
+    const shoulderDiff = Math.abs(leftShoulder - rightShoulder) / head;
+    if (shoulderDiff > threshold) {
+      return { detected: false, confidence: 0 };
+    }
+    
+    // Head should be significantly higher than shoulders
+    const headHeight = (head - Math.max(leftShoulder, rightShoulder)) / head;
+    if (headHeight < 0.02) {
+      return { detected: false, confidence: 0 };
+    }
+    
+    const confidence = Math.min(0.7 + headHeight, 0.95);
+    
+    return {
+      detected: true,
+      confidence,
+      direction: 'down',
+    };
+  }
+}
+
+/**
+ * Triangle Patterns (Ascending, Descending, Symmetrical)
+ */
+export class TrianglePattern extends BasePattern {
+  name = 'Triangle';
+  type = 'triangle';
+  
+  detect(candles: Candle[], options?: PatternOptions): PatternResult {
+    const lookback = options?.lookback ?? 30;
+    const type = options?.type || 'symmetrical';
+    
+    const highs = this.getHighs(candles);
+    const lows = this.getLows(candles);
+    
+    if (lookback > highs.length) return { detected: false, confidence: 0 };
+    
+    const recentHighs = highs.slice(-lookback);
+    const recentLows = lows.slice(-lookback);
+    
+    // Linear regression for highs and lows
+    const regression = (values: number[]) => {
+      const n = values.length;
+      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+      
+      for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += values[i];
+        sumXY += i * values[i];
+        sumX2 += i * i;
+      }
+      
+      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+      const intercept = (sumY - slope * sumX) / n;
+      
+      return { slope, intercept };
+    };
+    
+    const highReg = regression(recentHighs);
+    const lowReg = regression(recentLows);
+    
+    // Check pattern type
+    if (type === 'ascending') {
+      // Ascending: flat lows, rising highs
+      const lowSlopeAbs = Math.abs(lowReg.slope);
+      if (highReg.slope > 0.1 && lowSlopeAbs < 0.1) {
+        return { detected: true, confidence: 0.75, direction: 'up' };
+      }
+    } else if (type === 'descending') {
+      // Descending: falling lows, flat highs
+      const highSlopeAbs = Math.abs(highReg.slope);
+      if (lowReg.slope < -0.1 && highSlopeAbs < 0.1) {
+        return { detected: true, confidence: 0.75, direction: 'down' };
+      }
+    } else {
+      // Symmetrical: converging trendlines
+      const highSlopeAbs = Math.abs(highReg.slope);
+      const lowSlopeAbs = Math.abs(lowReg.slope);
+      if (highReg.slope < -0.05 && lowReg.slope > 0.05) {
+        return { detected: true, confidence: 0.7, direction: 'neutral' };
+      }
+    }
+    
+    return { detected: false, confidence: 0 };
+  }
+}
+
+/**
  * Pattern Registry
  */
 export class PatternRegistry {
@@ -184,6 +307,11 @@ export class PatternRegistry {
     this.register('crossover', CrossoverPattern);
     this.register('double_top', DoubleTopBottomPattern);
     this.register('double_bottom', DoubleTopBottomPattern);
+    this.register('head_shoulders', HeadShouldersPattern);
+    this.register('triangle', TrianglePattern);
+    this.register('ascending_triangle', TrianglePattern);
+    this.register('descending_triangle', TrianglePattern);
+    this.register('symmetrical_triangle', TrianglePattern);
   }
   
   register(type: string, cls: new () => BasePattern): void {

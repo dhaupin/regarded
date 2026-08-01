@@ -6,7 +6,7 @@
  */
 
 import type { Balance, Candle, CandleInterval, Order, OrderResult, Trade, EncryptedSecrets } from '../types';
-import { BaseConnector } from './base';
+import { BaseConnector, type ConnectorConfig } from './base';
 import { createError, ErrorCode } from '../error';
 import { logAuditEvent } from '../audit';
 
@@ -15,9 +15,16 @@ export class SolanaConnector extends BaseConnector {
   exchange = 'solana';
   private publicKey?: string;
   
+  constructor(config: ConnectorConfig = {}) {
+    super(config);
+  }
+  
   async connect(credentials: EncryptedSecrets): Promise<boolean> {
     // Would connect to Solana wallet
     this.connected = true;
+    
+    // Emit connected event
+    this.emit('connector:connected', { exchange: this.exchange, name: this.name });
     
     // Audit log
     logAuditEvent('connector_connected' as any, this.exchange, {
@@ -30,6 +37,9 @@ export class SolanaConnector extends BaseConnector {
   async disconnect(): Promise<void> {
     this.publicKey = undefined;
     this.connected = false;
+    
+    // Emit disconnected event
+    this.emit('connector:disconnected', { exchange: this.exchange, name: this.name });
     
     // Audit log
     logAuditEvent('connector_disconnected' as any, this.exchange, {
