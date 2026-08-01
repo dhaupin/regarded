@@ -11,8 +11,7 @@ import {
   PlayCircleOutlined,
   StopOutlined,
 } from '@ant-design/icons';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiGet, apiPost } from '@/lib/api';
 
 interface AgentStatus {
   running: boolean;
@@ -28,22 +27,15 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
 
-  const fetchAgentStatus = () => {
-    fetch(`${API_URL}/agent/status`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setAgentStatus(data.data);
-        }
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+  const fetchAgentStatus = async () => {
+    try {
+      const data = await apiGet<AgentStatus>('/agent/status');
+      setAgentStatus(data);
+    } catch (error) {
+      console.error('Failed to fetch agent status:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -57,22 +49,11 @@ export function Dashboard() {
     const action = agentStatus.running ? 'stop' : 'start';
     
     try {
-      const res = await fetch(`${API_URL}/agent/${action}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ tick_interval: 60000 }),
+      const data = await apiPost<{ running: boolean }>(`/agent/${action}`, { tick_interval: 60000 });
+      setAgentStatus({
+        ...agentStatus,
+        running: data.running,
       });
-      
-      const data = await res.json();
-      if (data.success) {
-        setAgentStatus({
-          ...agentStatus,
-          running: data.data.running,
-        });
-      }
     } catch (error) {
       console.error('Failed to toggle agent:', error);
     } finally {

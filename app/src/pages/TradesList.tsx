@@ -4,8 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Spin, Select, Pagination } from 'antd';
 import { SwapOutlined } from '@ant-design/icons';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiGet } from '@/lib/api';
 
 interface Trade {
   id: string;
@@ -33,24 +32,20 @@ export function TradesList() {
   const [total, setTotal] = useState(0);
   const pageSize = 20;
 
-  const fetchTrades = (pageNum: number = 1) => {
+  const fetchTrades = async (pageNum: number = 1) => {
     setLoading(true);
-    fetch(`${API_URL}/trades?page=${pageNum}&page_size=${pageSize}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setTrades(data.data?.items || []);
-          setTotal(data.data?.total || 0);
-        }
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
+    try {
+      const data = await apiGet<{ items: Trade[]; total: number }>('/trades', {
+        page: pageNum,
+        page_size: pageSize,
       });
+      setTrades(data.items || []);
+      setTotal(data.total || 0);
+    } catch (error) {
+      console.error('Failed to fetch trades:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

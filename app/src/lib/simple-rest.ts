@@ -4,6 +4,23 @@ const API_URL = typeof window !== 'undefined'
   ? (import.meta.env.VITE_API_URL || '/api')
   : '/api';
 
+// Get auth token from localStorage
+function getAuthHeaders(): HeadersInit {
+  const token = typeof window !== 'undefined' 
+    ? localStorage.getItem('auth_token')
+    : null;
+  
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+}
+
 export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
   getList: async ({ resource, pagination, filters, sorters }) => {
     const url = new URL(`${baseUrl}/${resource}`, window.location.origin);
@@ -22,9 +39,7 @@ export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
     }
 
     const response = await fetch(url.toString(), {
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -41,9 +56,7 @@ export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
 
   getOne: async ({ resource, id }) => {
     const response = await fetch(`${baseUrl}/${resource}/${id}`, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -51,15 +64,13 @@ export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
     }
 
     const data = await response.json();
-    return { data };
+    return { data: data.data || data };
   },
 
   create: async ({ resource, variables }) => {
     const response = await fetch(`${baseUrl}/${resource}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(variables),
     });
 
@@ -68,15 +79,13 @@ export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
     }
 
     const data = await response.json();
-    return { data };
+    return { data: data.data || data };
   },
 
   update: async ({ resource, id, variables }) => {
     const response = await fetch(`${baseUrl}/${resource}/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(variables),
     });
 
@@ -85,15 +94,13 @@ export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
     }
 
     const data = await response.json();
-    return { data };
+    return { data: data.data || data };
   },
 
   deleteOne: async ({ resource, id }) => {
     const response = await fetch(`${baseUrl}/${resource}/${id}`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -101,17 +108,17 @@ export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
     }
 
     const data = await response.json();
-    return { data };
+    return { data: data.data || data };
   },
 
   getApiUrl: () => baseUrl,
 
-  custom: async ({ url, method, headers, payload }) => {
+  custom: async ({ url, method = 'GET', headers = {}, payload }) => {
     const response = await fetch(url, {
       method,
       headers: {
+        ...getAuthHeaders(),
         ...headers,
-        'Content-Type': 'application/json',
       },
       body: payload ? JSON.stringify(payload) : undefined,
     });
@@ -121,6 +128,6 @@ export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
     }
 
     const data = await response.json();
-    return { data };
+    return { data: data.data || data };
   },
 });
