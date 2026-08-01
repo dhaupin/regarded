@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Spin } from 'antd';
+import { Spin, Select } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
 
@@ -20,6 +21,9 @@ interface Connector {
 export function ConnectorsList() {
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [modeFilter, setModeFilter] = useState<string>('all');
 
   const fetchConnectors = () => {
     fetch(`${API_URL}/connectors`, {
@@ -40,6 +44,26 @@ export function ConnectorsList() {
   useEffect(() => {
     fetchConnectors();
   }, []);
+
+  const filteredConnectors = useMemo(() => {
+    return connectors.filter(connector => {
+      // Search filter
+      const searchLower = search.toLowerCase();
+      const matchesSearch = !search || 
+        connector.label.toLowerCase().includes(searchLower) ||
+        connector.exchange.toLowerCase().includes(searchLower);
+      
+      // Status filter
+      const matchesStatus = statusFilter === 'all' || connector.status === statusFilter;
+      
+      // Mode filter (paper vs live)
+      const matchesMode = modeFilter === 'all' || 
+        (modeFilter === 'paper' && connector.paper) ||
+        (modeFilter === 'live' && !connector.paper);
+      
+      return matchesSearch && matchesStatus && matchesMode;
+    });
+  }, [connectors, search, statusFilter, modeFilter]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -78,27 +102,69 @@ export function ConnectorsList() {
         </Link>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder="Search connectors..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-xs"
+          
+        />
+        <Select
+          placeholder="Status"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          style={{ width: 140 }}
+          options={[
+            { value: 'all', label: 'All Status' },
+            { value: 'connected', label: 'Connected' },
+            { value: 'disconnected', label: 'Disconnected' },
+          ]}
+        />
+        <Select
+          placeholder="Mode"
+          value={modeFilter}
+          onChange={setModeFilter}
+          style={{ width: 140 }}
+          options={[
+            { value: 'all', label: 'All Modes' },
+            { value: 'paper', label: 'Paper Trading' },
+            { value: 'live', label: 'Live Trading' },
+          ]}
+        />
+        <span className="text-sm text-muted-foreground ml-auto">
+          {filteredConnectors.length} of {connectors.length} connectors
+        </span>
+      </div>
+
       {loading ? (
         <Card>
           <CardContent className="py-10 text-center">
             <Spin size="large" />
           </CardContent>
         </Card>
-      ) : connectors.length === 0 ? (
+      ) : filteredConnectors.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
             <ApiOutlined className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No connectors yet</p>
-            <Link to="/connectors/create">
-              <Button variant="outline" className="mt-4">
-                Add your first connector
-              </Button>
-            </Link>
+            <p className="text-muted-foreground">
+              {search || statusFilter !== 'all' || modeFilter !== 'all' 
+                ? 'No connectors match your filters' 
+                : 'No connectors yet'}
+            </p>
+            {!search && statusFilter === 'all' && modeFilter === 'all' && (
+              <Link to="/connectors/create">
+                <Button variant="outline" className="mt-4">
+                  Add your first connector
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {connectors.map((connector) => (
+          {filteredConnectors.map((connector) => (
             <Card key={connector.id}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-lg">{connector.exchange}</CardTitle>

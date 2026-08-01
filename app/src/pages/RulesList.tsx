@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Spin, Select } from 'antd';
 import { PlusOutlined, FileProtectOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
 
@@ -12,6 +14,7 @@ interface Rule {
   id: string;
   name: string;
   condition_logic: string;
+  trigger_type?: string;
   enabled: boolean;
   conditions?: unknown[];
 }
@@ -19,6 +22,8 @@ interface Rule {
 export function RulesList() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const fetchRules = () => {
     fetch(`${API_URL}/rules`, {
@@ -39,6 +44,21 @@ export function RulesList() {
   useEffect(() => {
     fetchRules();
   }, []);
+
+  const filteredRules = useMemo(() => {
+    return rules.filter(rule => {
+      const searchLower = search.toLowerCase();
+      const matchesSearch = !search || 
+        rule.name.toLowerCase().includes(searchLower) ||
+        rule.trigger_type?.toLowerCase().includes(searchLower);
+      
+      const matchesStatus = statusFilter === 'all' || 
+        (statusFilter === 'enabled' && rule.enabled) ||
+        (statusFilter === 'disabled' && !rule.enabled);
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [rules, search, statusFilter]);
 
   const handleDelete = async (id: string, _name: string) => {
     try {
@@ -77,27 +97,58 @@ export function RulesList() {
         </Link>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder="Search rules..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-xs"
+          
+        />
+        <Select
+          placeholder="Status"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          style={{ width: 140 }}
+          options={[
+            { value: 'all', label: 'All Status' },
+            { value: 'enabled', label: 'Enabled' },
+            { value: 'disabled', label: 'Disabled' },
+          ]}
+        />
+        <span className="text-sm text-muted-foreground ml-auto">
+          {filteredRules.length} of {rules.length} rules
+        </span>
+      </div>
+
       {loading ? (
         <Card>
           <CardContent className="py-10 text-center">
-            Loading...
+            <Spin size="large" />
           </CardContent>
         </Card>
-      ) : rules.length === 0 ? (
+      ) : filteredRules.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
             <FileProtectOutlined className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No rules configured</p>
-            <Link to="/rules/create">
-              <Button variant="outline" className="mt-4">
-                Create your first rule
-              </Button>
-            </Link>
+            <p className="text-muted-foreground">
+              {search || statusFilter !== 'all' 
+                ? 'No rules match your filters' 
+                : 'No rules configured'}
+            </p>
+            {!search && statusFilter === 'all' && (
+              <Link to="/rules/create">
+                <Button variant="outline" className="mt-4">
+                  Create your first rule
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {rules.map((rule) => (
+          {filteredRules.map((rule) => (
             <Card key={rule.id}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-lg">{rule.name}</CardTitle>
@@ -111,10 +162,10 @@ export function RulesList() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Logic: {rule.condition_logic || 'and'}
+                  Trigger: {rule.trigger_type || 'N/A'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Conditions: {rule.conditions?.length || 0}
+                  Logic: {rule.condition_logic || 'and'} | Conditions: {rule.conditions?.length || 0}
                 </p>
                 <div className="flex gap-2 mt-4">
                   <Link to={`/rules/${rule.id}`}>
