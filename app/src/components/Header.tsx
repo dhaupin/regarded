@@ -11,6 +11,7 @@ import {
   WalletOutlined,
   SettingOutlined,
   LogoutOutlined,
+  BugOutlined,
 } from '@ant-design/icons';
 
 const { Header: AntHeader } = Layout;
@@ -39,6 +40,7 @@ export function Header() {
     { key: '/trades', icon: <SwapOutlined />, label: <Link to="/trades">Trades</Link> },
     { key: '/positions', icon: <WalletOutlined />, label: <Link to="/positions">Positions</Link> },
     { key: '/settings', icon: <SettingOutlined />, label: <Link to="/settings">Settings</Link> },
+    { key: '/debug', icon: <BugOutlined />, label: <Link to="/debug">Debug</Link> },
   ];
 
   return (

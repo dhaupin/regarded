@@ -12,3 +12,4 @@ export { RulesEdit } from './RulesEdit';
 export { TradesList } from './TradesList';
 export { PositionsList } from './PositionsList';
 export { Settings } from './Settings';
+export { DebugPage } from './debug/DebugPage';
