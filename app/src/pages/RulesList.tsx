@@ -7,8 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Spin, Select, Checkbox } from 'antd';
 import { PlusOutlined, FileProtectOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiGet, apiDelete } from '@/lib/api';
 
 interface Rule {
   id: string;
@@ -26,20 +25,15 @@ export function RulesList() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const fetchRules = () => {
-    fetch(`${API_URL}/rules`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setRules(data.data?.items || []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+  const fetchRules = async () => {
+    try {
+      const data = await apiGet<{ items: Rule[] }>('/rules');
+      setRules(data.items || []);
+    } catch (error) {
+      console.error('Failed to fetch rules:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -82,20 +76,10 @@ export function RulesList() {
 
   const handleDelete = async (id: string, _name: string) => {
     try {
-      const res = await fetch(`${API_URL}/rules/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
-      
-      if (res.ok) {
-        message.success('Rule deleted');
-        setRules(rules.filter(r => r.id !== id));
-        setSelectedIds(prev => prev.filter(i => i !== id));
-      } else {
-        message.error('Failed to delete rule');
-      }
+      await apiDelete(`/rules/${id}`);
+      message.success('Rule deleted');
+      setRules(rules.filter(r => r.id !== id));
+      setSelectedIds(prev => prev.filter(i => i !== id));
     } catch {
       message.error('Failed to delete rule');
     }
@@ -104,13 +88,12 @@ export function RulesList() {
   const handleBulkDelete = async () => {
     const results = await Promise.all(
       selectedIds.map(async (id) => {
-        const res = await fetch(`${API_URL}/rules/${id}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-          },
-        });
-        return res.ok;
+        try {
+          await apiDelete(`/rules/${id}`);
+          return true;
+        } catch {
+          return false;
+        }
       })
     );
 
@@ -127,15 +110,12 @@ export function RulesList() {
   const handleBulkToggle = async (enable: boolean) => {
     const results = await Promise.all(
       selectedIds.map(async (id) => {
-        const res = await fetch(`${API_URL}/rules/${id}`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ enabled: enable }),
-        });
-        return res.ok;
+        try {
+          await apiPut(`/rules/${id}`, { enabled: enable });
+          return true;
+        } catch {
+          return false;
+        }
       })
     );
 
