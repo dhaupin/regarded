@@ -56,8 +56,8 @@ export function Header() {
         <Button 
           variant="ghost" 
           onClick={logout}
-          icon={<LogoutOutlined />}
         >
+          <LogoutOutlined style={{ marginRight: '8px' }} />
           Logout
         </Button>
       </div>

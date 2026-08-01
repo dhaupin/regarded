@@ -4,17 +4,6 @@ const API_URL = typeof window !== 'undefined'
   ? (import.meta.env.VITE_API_URL || '/api')
   : '/api';
 
-function axiosRequestHandler(config: any) {
-  const token = localStorage.getItem('auth_token');
-  if (token) {
-    config.headers = {
-      ...config.headers,
-      Authorization: `Bearer ${token}`,
-    };
-  }
-  return config;
-}
-
 export const dataProvider = (baseUrl: string = API_URL): DataProvider => ({
   getList: async ({ resource, pagination, filters, sorters }) => {
     const url = new URL(`${baseUrl}/${resource}`, window.location.origin);

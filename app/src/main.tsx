@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { Refine } from '@refinedev/core';
-import { HookFormProvider } from '@refinedev/react-hook-form';
 import { dataProvider } from './lib/simple-rest';
 import App from './App';
 import './index.css';
@@ -14,7 +13,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <Refine
         dataProvider={dataProvider(API_URL)}
-        HookFormProvider
         options={{
           syncWithLocation: true,
           warnWhenUnsavedChanges: true,

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthProvider } from '@/hooks/useAuth';
-import { Row, Col, Statistic } from 'antd';
+import { Row, Col } from 'antd';
 import {
   WalletOutlined,
   ThunderboltOutlined,

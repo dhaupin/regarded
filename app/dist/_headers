@@ -1,0 +1,99 @@
+# Cloudflare Pages Headers
+# Security, caching, and SEO headers
+
+# Global headers - applies to all routes
+/*
+  # Security headers
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  X-XSS-Protection: 0
+
+  # Content Security Policy
+  # Adjust based on your actual third-party dependencies
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data:; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+  # Cross-origin policies for enhanced security
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+  Cross-Origin-Resource-Policy: same-origin
+
+  # Default caching - dynamic content
+  Cache-Control: no-cache
+
+# Static assets - aggressive caching
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# JavaScript and CSS
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+# Images
+/*.png
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpeg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.gif
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.svg
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.ico
+  Cache-Control: public, max-age=31536000, immutable
+
+# Fonts
+/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.ttf
+  Cache-Control: public, max-age=31536000, immutable
+
+# SEO files - reasonable caching
+/sitemap.xml
+  Cache-Control: public, max-age=86400
+
+/robots.txt
+  Cache-Control: public, max-age=86400
+
+/site.webmanifest
+  Cache-Control: public, max-age=86400
+
+# Prerendered HTML files - cache based on build
+/index.html
+  Cache-Control: public, max-age=3600
+
+/dashboard/index.html
+  Cache-Control: public, max-age=3600
+
+/connectors/index.html
+  Cache-Control: public, max-age=3600
+
+/strategies/index.html
+  Cache-Control: public, max-age=3600
+
+/rules/index.html
+  Cache-Control: public, max-age=3600
+
+/trades/index.html
+  Cache-Control: public, max-age=3600
+
+/settings/index.html
+  Cache-Control: public, max-age=3600
+
+/login/index.html
+  Cache-Control: public, max-age=3600
