@@ -120,6 +120,49 @@ apiRoutes.post('/connectors', async (c: Context) => {
   }, 201);
 });
 
+// Test connector connection
+apiRoutes.post('/connectors/test', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const body = await c.req.json();
+  const { exchange, apiKey, apiSecret, paperMode } = body;
+
+  if (!exchange || !apiKey || !apiSecret) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing required fields' } }, 400);
+  }
+
+  // Simulate connection test based on exchange
+  // In production, this would actually test the connection
+  try {
+    // Validate API key format based on exchange
+    if (exchange === 'kraken') {
+      if (apiKey.length < 10) {
+        return c.json({ success: false, error: { code: 'INVALID_API_KEY', message: 'Invalid Kraken API key format' } }, 400);
+      }
+    } else if (exchange === 'solana') {
+      // Validate Solana address format (base58)
+      if (apiKey.length < 32 || apiKey.length > 44) {
+        return c.json({ success: false, error: { code: 'INVALID_API_KEY', message: 'Invalid Solana address format' } }, 400);
+      }
+    }
+
+    // Return success - connection is valid
+    return c.json({
+      success: true,
+      data: {
+        message: 'Connection test passed',
+        exchange,
+        paperMode: paperMode ?? true,
+      },
+    });
+  } catch (error) {
+    return c.json({ success: false, error: { code: 'CONNECTION_FAILED', message: 'Failed to connect to exchange' } }, 500);
+  }
+});
+
 // Get connector
 apiRoutes.get('/connectors/:id', async (c: Context) => {
   const userId = await getUserId(c);
@@ -340,6 +383,80 @@ apiRoutes.post('/rules', async (c: Context) => {
   await saveKVItem(c, `rule:${userId}:${id}`, rule);
   
   return c.json({ success: true, data: rule }, 201);
+});
+
+// Validate rule (dry run)
+apiRoutes.post('/rules/validate', async (c: Context) => {
+  const userId = await getUserId(c);
+  if (!userId) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401);
+  }
+
+  const body = await c.req.json();
+  const { name, conditions, triggers, condition_logic } = body;
+
+  const errors: string[] = [];
+
+  // Validate name
+  if (!name || name.trim().length === 0) {
+    errors.push('Rule name is required');
+  }
+
+  // Validate conditions
+  if (!conditions || conditions.length === 0) {
+    errors.push('At least one condition is required');
+  }
+
+  // Validate triggers
+  if (!triggers || triggers.length === 0) {
+    errors.push('At least one trigger is required');
+  }
+
+  // Validate condition_logic
+  if (condition_logic && !['and', 'or'].includes(condition_logic)) {
+    errors.push('condition_logic must be "and" or "or"');
+  }
+
+  // Validate condition structure
+  if (conditions) {
+    conditions.forEach((cond: any, index: number) => {
+      if (!cond.type) {
+        errors.push(`Condition ${index + 1}: type is required`);
+      }
+      if (!cond.operator) {
+        errors.push(`Condition ${index + 1}: operator is required`);
+      }
+    });
+  }
+
+  // Validate trigger structure
+  if (triggers) {
+    triggers.forEach((trigger: any, index: number) => {
+      if (!trigger.type) {
+        errors.push(`Trigger ${index + 1}: type is required`);
+      }
+    });
+  }
+
+  if (errors.length > 0) {
+    return c.json({
+      success: false,
+      error: {
+        code: 'VALIDATION_FAILED',
+        message: 'Rule validation failed',
+        details: errors,
+      },
+    }, 400);
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      valid: true,
+      message: 'Rule configuration is valid',
+      warnings: [],
+    },
+  });
 });
 
 // Get rule

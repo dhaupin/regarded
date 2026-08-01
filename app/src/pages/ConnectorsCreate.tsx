@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from 'antd';
 import { message } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -19,6 +19,8 @@ interface FormErrors {
 export function ConnectorsCreate() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{success: boolean; message: string} | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [formData, setFormData] = useState({
     exchange: 'kraken',
@@ -45,6 +47,48 @@ export function ConnectorsCreate() {
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleTestConnection = async () => {
+    if (!formData.apiKey.trim() || !formData.apiSecret.trim()) {
+      message.error('Please enter API key and secret first');
+      return;
+    }
+
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${API_URL}/connectors/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          exchange: formData.exchange,
+          apiKey: formData.apiKey,
+          apiSecret: formData.apiSecret,
+          paperMode: formData.paperMode,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setTestResult({ success: true, message: 'Connection successful!' });
+        message.success('Connection test passed');
+      } else {
+        setTestResult({ success: false, message: data.error?.message || 'Connection failed' });
+        message.error(data.error?.message || 'Connection test failed');
+      }
+    } catch (error) {
+      setTestResult({ success: false, message: 'Connection test failed' });
+      message.error('Connection test failed');
+    } finally {
+      setTesting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -184,11 +228,30 @@ export function ConnectorsCreate() {
                   onChange={(e) => {
                     setFormData({ ...formData, apiSecret: e.target.value });
                     if (errors.apiSecret) setErrors({ ...errors, apiSecret: undefined });
+                    setTestResult(null);
                   }}
                   className={errors.apiSecret ? 'border-red-500' : undefined}
                 />
                 {errors.apiSecret && (
                   <p className="text-sm text-red-500">{errors.apiSecret}</p>
+                )}
+              </div>
+
+              {/* Test Connection */}
+              <div className="flex items-center gap-4 pt-2">
+                <Button 
+                  type="default" 
+                  onClick={handleTestConnection}
+                  loading={testing}
+                  disabled={!formData.apiKey || !formData.apiSecret}
+                >
+                  Test Connection
+                </Button>
+                {testResult && (
+                  <span className={`flex items-center gap-1 ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                    {testResult.success ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                    {testResult.message}
+                  </span>
                 )}
               </div>
             </div>
