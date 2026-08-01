@@ -28,6 +28,12 @@ export function RulesCreate() {
     enabled: true,
     conditions: [],
     triggers: [],
+    webhook: {
+      url: '',
+      method: 'POST',
+      headers: {},
+      body_template: '',
+    },
   });
 
   const validateLocal = (): boolean => {
@@ -214,6 +220,63 @@ export function RulesCreate() {
                 <p className="text-sm text-red-500">{errors.trigger_type}</p>
               )}
             </div>
+
+            {/* Webhook Configuration */}
+            {formData.trigger_type === 'webhook' && (
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                <h4 className="font-semibold">Webhook Configuration</h4>
+                <p className="text-sm text-muted-foreground">
+                  Configure where to send webhook notifications when this rule triggers
+                </p>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="webhook_url">Webhook URL *</Label>
+                  <Input
+                    id="webhook_url"
+                    placeholder="https://your-webhook-endpoint.com/webhook"
+                    value={formData.webhook.url}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      webhook: { ...formData.webhook, url: e.target.value }
+                    })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="webhook_method">HTTP Method</Label>
+                  <Select
+                    id="webhook_method"
+                    className="w-full"
+                    value={formData.webhook.method}
+                    onChange={(value) => setFormData({ 
+                      ...formData, 
+                      webhook: { ...formData.webhook, method: value }
+                    })}
+                    options={[
+                      { value: 'POST', label: 'POST' },
+                      { value: 'GET', label: 'GET' },
+                      { value: 'PUT', label: 'PUT' },
+                    ]}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="webhook_body">Body Template (optional)</Label>
+                  <Input
+                    id="webhook_body"
+                    placeholder='{"symbol": "{{symbol}}", "price": {{price}}, "pnl": {{pnl}}}'
+                    value={formData.webhook.body_template}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      webhook: { ...formData.webhook, body_template: e.target.value }
+                    })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use {"{{variable}}"} syntax for dynamic values. Available: symbol, price, pnl, rule_name
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center space-x-2">
               <Switch
