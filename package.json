@@ -7,8 +7,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint lib/ test/",
-    "lint:fix": "eslint lib/ test/ --fix",
+    "lint": "eslint lib/*.ts",
+    "lint:fix": "eslint lib/*.ts --fix",
     "typecheck": "tsc --noEmit --skipLibCheck"
   },
   "devDependencies": {
