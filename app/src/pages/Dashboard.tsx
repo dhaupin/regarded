@@ -1,15 +1,86 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useAuthProvider } from '@/hooks/useAuth';
-import { Row, Col } from 'antd';
+import { Row, Col, Switch, Spin } from 'antd';
 import {
   WalletOutlined,
   ThunderboltOutlined,
   ApiOutlined,
   FileProtectOutlined,
+  PlayCircleOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
+
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+interface AgentStatus {
+  running: boolean;
+  positions: number;
+  trades_today: number;
+  pnl_today: number;
+  tick_interval?: number;
+}
 
 export function Dashboard() {
   const { user } = useAuthProvider();
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState(false);
+
+  const fetchAgentStatus = () => {
+    fetch(`${API_URL}/agent/status`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setAgentStatus(data.data);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchAgentStatus();
+  }, []);
+
+  const handleToggleAgent = async () => {
+    if (!agentStatus) return;
+    
+    setToggling(true);
+    const action = agentStatus.running ? 'stop' : 'start';
+    
+    try {
+      const res = await fetch(`${API_URL}/agent/${action}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tick_interval: 60000 }),
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        setAgentStatus({
+          ...agentStatus,
+          running: data.data.running,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to toggle agent:', error);
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const isRunning = agentStatus?.running ?? false;
 
   return (
     <div className="space-y-6">
@@ -20,6 +91,76 @@ export function Dashboard() {
         </p>
       </div>
 
+      {/* Agent Control Card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ThunderboltOutlined />
+              Trading Agent
+            </CardTitle>
+            <CardDescription>
+              Control your automated trading agent
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-4">
+            {loading ? (
+              <Spin />
+            ) : (
+              <>
+                <Badge variant={isRunning ? 'success' : 'secondary'}>
+                  {isRunning ? 'Running' : 'Stopped'}
+                </Badge>
+                <Switch
+                  checked={isRunning}
+                  onChange={handleToggleAgent}
+                  loading={toggling}
+                  checkedChildren={<PlayCircleOutlined />}
+                  unCheckedChildren={<StopOutlined />}
+                />
+              </>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-4">
+              <Spin />
+            </div>
+          ) : (
+            <Row gutter={[16, 16]}>
+              <Col xs={12} sm={6}>
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{agentStatus?.positions ?? 0}</div>
+                  <p className="text-xs text-muted-foreground">Open Positions</p>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{agentStatus?.trades_today ?? 0}</div>
+                  <p className="text-xs text-muted-foreground">Trades Today</p>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${(agentStatus?.pnl_today ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ${(agentStatus?.pnl_today ?? 0).toFixed(2)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">P&L Today</p>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{(agentStatus?.tick_interval ?? 60000) / 1000}s</div>
+                  <p className="text-xs text-muted-foreground">Tick Interval</p>
+                </div>
+              </Col>
+            </Row>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Stats Cards */}
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
