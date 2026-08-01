@@ -103,6 +103,170 @@ const engine = createRulesEngine({ maxChainDepth: 3 });
 await engine.evaluateRule(rule, context);
 ```
 
+## Deployment
+
+This guide covers deploying to Cloudflare Pages (frontend) and Cloudflare Workers (backend).
+
+### Prerequisites
+
+- Cloudflare account
+- Node.js 18+
+
+---
+
+### 1. Cloudflare Resources
+
+Create these resources in Cloudflare dashboard:
+
+| Resource | Type | Name |
+|----------|------|------|
+| D2 Database | D1 | `regarded-db` |
+| KV Namespace | KV | `regarded-kv` |
+
+---
+
+### 2. Backend (Workers)
+
+#### Configure wrangler.toml
+
+Update `srv/providers/cloudflare/wrangler.toml` with your actual IDs:
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "regarded-db"
+database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # From dashboard
+
+[[kv_namespaces]]
+binding = "KV"
+id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # From dashboard
+```
+
+#### Set Secrets
+
+```bash
+cd srv
+
+# Login to Cloudflare (if not already)
+npx wrangler login
+
+# Set required secrets (replace with your values)
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put JWT_SECRET
+```
+
+**Getting Google OAuth credentials:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project → APIs & Services → Credentials
+3. Create OAuth 2.0 Client ID
+4. Add authorized redirect URI: `https://your-domain/auth/google/callback`
+
+#### Install Dependencies
+
+```bash
+cd srv
+npm install
+```
+
+#### Run Locally
+
+```bash
+npm run dev
+```
+
+#### Deploy to Production
+
+```bash
+npm run deploy
+```
+
+Or deploy to specific environment:
+```bash
+npm run deploy:staging  # Deploy to staging
+npm run deploy:prod     # Deploy to production
+```
+
+---
+
+### 3. Frontend (Pages)
+
+#### Configure Environment
+
+Copy and configure `app/.env.example`:
+
+```bash
+cp app/.env.example app/.env
+```
+
+Edit `app/.env`:
+```env
+# Production: Workers URL after deployment
+VITE_API_URL=https://your-workers-domain.workers.dev
+```
+
+#### Build & Deploy via GitHub
+
+1. Push to `main` branch (or merge staging to main)
+2. In Cloudflare Dashboard → Pages → regarded
+3. Configure:
+
+| Setting | Value |
+|---------|-------|
+| Production branch | `main` |
+| Build command | `npm run build:frontend` |
+| Build output directory | `app/dist` |
+
+4. Add custom domain (optional)
+
+#### Local Development
+
+```bash
+# Frontend only (needs workers running)
+cd app
+npm run dev
+
+# Or with local workers proxy
+cd app
+VITE_API_URL=http://localhost:8787 npm run dev
+```
+
+---
+
+### 4. Environment Variables Summary
+
+| Variable | Where | Description |
+|----------|-------|-------------|
+| `GOOGLE_CLIENT_ID` | Workers (secret) | Google OAuth Client ID |
+| `GOOGLE_CLIENT_SECRET` | Workers (secret) | Google OAuth Client Secret |
+| `JWT_SECRET` | Workers (secret) | Secret for JWT tokens |
+| `VITE_API_URL` | Frontend (.env) | Workers API URL |
+
+---
+
+### 5. Database Migrations
+
+After deploying workers, run D2 migrations:
+
+```bash
+cd srv
+npx wrangler d1 migrations apply regarded-db
+```
+
+---
+
+### Quick Deploy Commands
+
+```bash
+# Full deploy (both)
+cd srv && npm run deploy                    # Backend
+# Then trigger Pages deploy via GitHub push
+
+# Or from root
+npm run build:frontend                     # Build frontend
+cd srv && npm run deploy                   # Deploy backend
+```
+
 ## Tech Stack
 
 - **Runtime**: Cloudflare Workers
