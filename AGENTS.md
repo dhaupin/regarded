@@ -458,31 +458,42 @@ VITE_GOOGLE_CLIENT_ID=...
 
 ---
 
-## Common Development Tasks
+## Deployment
 
-### Running Locally
+### Cloudflare Resources
+Create in Cloudflare dashboard:
+- D1 Database: `regarded-db`
+- KV Namespace: `regarded-kv`
+
+### Frontend (Pages)
+Cloudflare Pages deploys automatically on push to staging/main.
+
+Settings:
+- Build command: `npm run build`
+- Build output: `dist`
+- Root directory: `app`
+
+### Backend (Workers)
+Workers deploy via GitHub Actions (`.github/workflows/deploy-workers.yml`).
+
+Required secrets (GitHub → Settings → Secrets):
+- `CF_ACCOUNT_ID` - Cloudflare Account ID
+- `CF_API_TOKEN` - Cloudflare API Token
+
+Trigger: Push to staging/main OR manually from GitHub → Actions → Deploy Workers
+
+### Local Development
 ```bash
 # Frontend
-cd frontend && npm run dev
+cd app && npm run dev
 
 # Backend (with Wrangler)
-cd backend && npx wrangler dev
-
-# Both with tunnel for OAuth
+cd srv && npx wrangler dev -c providers/cloudflare/wrangler.toml
 ```
 
 ### Database Migrations
 ```bash
-cd backend && npx wrangler d1 migrations apply regarded-db
-```
-
-### Deployment
-```bash
-# Backend
-cd backend && npx wrangler deploy
-
-# Frontend
-cd frontend && npm run build && npx wrangler pages deploy frontend/dist
+cd srv && npx wrangler d1 migrations apply regarded-db
 ```
 
 ---
@@ -527,5 +538,5 @@ Vant (https://github.com/AI-H虔u/vant) is a memory/experience system for AI age
 
 ---
 
-*Last Updated: 2026-07-29*
-*Version: 0.1.0*
+*Last Updated: 2026-08-02*
+*Version: 0.2.0*
