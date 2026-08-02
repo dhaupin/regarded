@@ -7,8 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button, Select } from 'antd';
 import { message } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiPost } from '@/lib/api';
 
 interface FormErrors {
   name?: string;
@@ -61,29 +60,19 @@ export function RulesCreate() {
     setValidationResult(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${API_URL}/rules/validate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          condition_logic: formData.condition_logic,
-          trigger_type: formData.trigger_type,
-          conditions: formData.conditions,
-          triggers: formData.triggers,
-        }),
+      const data = await apiPost<{ success: boolean; data?: { message: string }; error?: { message: string; details?: unknown[] } }>('/rules/validate', {
+        name: formData.name,
+        condition_logic: formData.condition_logic,
+        trigger_type: formData.trigger_type,
+        conditions: formData.conditions,
+        triggers: formData.triggers,
       });
-
-      const data = await response.json();
       
-      if (response.ok && data.success) {
-        setValidationResult({ valid: true, message: data.data.message });
+      if (data.success) {
+        setValidationResult({ valid: true, message: data.data?.message || 'Valid' });
         message.success('Rule validation passed');
       } else {
-        const details = data.error?.details || [];
+        const details = (data.error?.details || []) as string[];
         setValidationResult({ valid: false, message: data.error?.message || 'Validation failed', details });
         message.error(data.error?.message || 'Validation failed');
       }
@@ -106,26 +95,16 @@ export function RulesCreate() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${API_URL}/rules`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          condition_logic: formData.condition_logic,
-          trigger_type: formData.trigger_type,
-          enabled: formData.enabled,
-          conditions: [],
-          triggers: [],
-        }),
+      const data = await apiPost<{ success: boolean; error?: { message: string } }>('/rules', {
+        name: formData.name,
+        condition_logic: formData.condition_logic,
+        trigger_type: formData.trigger_type,
+        enabled: formData.enabled,
+        conditions: [],
+        triggers: [],
       });
-
-      const data = await response.json();
       
-      if (response.ok && data.success) {
+      if (data.success) {
         message.success('Rule created successfully');
         navigate('/rules');
       } else {

@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiPut } from '@/lib/api';
 
 export function ConnectorsEdit() {
   const { id } = useParams();
@@ -24,19 +23,8 @@ export function ConnectorsEdit() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${API_URL}/connectors/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        navigate('/connectors');
-      }
+      await apiPut(`/connectors/${id}`, formData);
+      navigate('/connectors');
     } catch (error) {
       console.error(error);
     } finally {

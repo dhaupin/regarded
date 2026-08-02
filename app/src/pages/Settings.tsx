@@ -7,8 +7,7 @@ import { useAuthProvider } from '@/hooks/useAuth';
 import { message } from 'antd';
 import { Spin, Button, Select, Tabs, Tag, Alert } from 'antd';
 import { PlusOutlined, DeleteOutlined, ApiOutlined, KeyOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiGet, apiPut } from '@/lib/api';
 
 interface UserConfig {
   theme: string;
@@ -68,19 +67,14 @@ export function Settings() {
   });
 
   useEffect(() => {
-    fetch(`${API_URL}/config`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-      },
-    })
-      .then((res) => res.json())
+    apiGet<UserConfig>('/config')
       .then((data) => {
-        if (data.success && data.data) {
-          setConfig(data.data);
-        }
-        setLoading(false);
+        setConfig(data);
       })
       .catch(() => {
+        // Use default config on error
+      })
+      .finally(() => {
         setLoading(false);
       });
   }, []);
@@ -88,21 +82,8 @@ export function Settings() {
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/config`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config),
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        message.success('Settings saved');
-      } else {
-        message.error('Failed to save settings');
-      }
+      await apiPut('/config', config);
+      message.success('Settings saved');
     } catch {
       message.error('Failed to save settings');
     } finally {

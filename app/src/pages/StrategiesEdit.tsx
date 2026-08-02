@@ -2,8 +2,7 @@ import { Edit, useForm } from '@refinedev/antd';
 import { useOne } from '@refinedev/core';
 import { Form, Input, Select, Switch, Spin } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiPut } from '@/lib/api';
 
 export function StrategiesEdit() {
   const { id } = useParams();
@@ -20,15 +19,7 @@ export function StrategiesEdit() {
   });
 
   const handleFinish = async (values: any) => {
-    const token = localStorage.getItem('auth_token');
-    await fetch(`${API_URL}/strategies/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(values),
-    });
+    await apiPut(`/strategies/${id}`, values);
     navigate('/strategies');
   };
 

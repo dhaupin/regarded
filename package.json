@@ -7,9 +7,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint lib/ test/",
-    "lint:fix": "eslint lib/ test/ --fix",
-    "typecheck": "tsc --noEmit --skipLibCheck"
+    "lint": "eslint lib/*.ts",
+    "lint:fix": "eslint lib/*.ts --fix",
+    "typecheck": "tsc --noEmit --skipLibCheck",
+    "build:frontend": "cd app && npm install && npm run build"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260730.1",

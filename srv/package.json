@@ -1,0 +1,23 @@
+{
+  "name": "regarded-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/app.ts --bundle --outfile=dist/worker.js --format=esm --platform=neutral --external:*.png --external:*.jpg --external:*.svg",
+    "dev": "wrangler dev -c providers/cloudflare/wrangler.toml",
+    "deploy": "npm run build && wrangler deploy -c providers/cloudflare/wrangler.toml",
+    "deploy:staging": "npm run build && wrangler deploy -c providers/cloudflare/wrangler.toml --env staging",
+    "deploy:prod": "npm run build && wrangler deploy -c providers/cloudflare/wrangler.toml --env production",
+    "cf:deploy": "echo 'Workers deployed via GitHub Actions'"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "@hono/zod-validator": "^0.2.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0",
+    "@cloudflare/workers-types": "^4.20250408.0",
+    "esbuild": "^0.20.0"
+  }
+}

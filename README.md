@@ -103,6 +103,208 @@ const engine = createRulesEngine({ maxChainDepth: 3 });
 await engine.evaluateRule(rule, context);
 ```
 
+## Deployment
+
+This guide covers deploying to Cloudflare Pages (frontend) and Cloudflare Workers (backend).
+
+### Prerequisites
+
+- Cloudflare account
+- Node.js 18+
+
+---
+
+### 1. Cloudflare Resources
+
+Create these resources in Cloudflare dashboard:
+
+| Resource | Type | Name |
+|----------|------|------|
+| D2 Database | D1 | `regarded-db` |
+| KV Namespace | KV | `regarded-kv` |
+
+---
+
+### 2. Backend (Workers)
+
+#### Configure wrangler.toml
+
+The wrangler.toml uses environment variables for D1/KV IDs (update-safe for forks):
+
+```toml
+# srv/providers/cloudflare/wrangler.toml
+main = "../../dist/worker.js"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "${CF_D1_NAME}"
+database_id = "${CF_D1_ID}"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "${CF_KV_ID}"
+```
+
+IDs are injected via GitHub secrets or local env vars.
+
+#### Set Secrets
+
+**GitHub Secrets (for CI/CD):**
+Set these in GitHub → Settings → Secrets → Actions:
+
+| Secret | Description |
+|--------|-------------|
+| `CF_ACCOUNT_ID` | Cloudflare Account ID |
+| `CF_API_TOKEN` | Cloudflare API Token |
+| `CF_D1_NAME` | D1 database name (e.g., "regarded-db") |
+| `CF_D1_ID` | D1 database ID (from Cloudflare dashboard) |
+| `CF_KV_ID` | KV namespace ID (from Cloudflare dashboard) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `JWT_SECRET` | JWT signing secret |
+
+**Local Development:**
+```bash
+cd srv
+export CF_D1_NAME=regarded-db
+export CF_D1_ID=your-d1-id
+export CF_KV_ID=your-kv-id
+
+# Set secrets locally
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put JWT_SECRET
+```
+
+**Getting Google OAuth credentials:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project → APIs & Services → Credentials
+3. Create OAuth 2.0 Client ID
+4. Add authorized redirect URI: `https://your-domain/auth/google/callback`
+
+#### Install Dependencies
+
+```bash
+cd srv
+npm install
+```
+
+#### Run Locally
+
+```bash
+cd srv
+npm run dev
+```
+
+#### Deploy via GitHub Actions (Recommended)
+
+Workers are deployed using GitHub Actions. Set up secrets in your repo:
+
+1. Go to GitHub → Repository → Settings → Secrets and variables → Actions
+2. Add these secrets:
+
+| Secret | Value |
+|--------|-------|
+| `CF_ACCOUNT_ID` | Your Cloudflare Account ID (from dashboard URL) |
+| `CF_API_TOKEN` | Cloudflare API Token (create at https://dash.cloudflare.com/profile/api-tokens) |
+
+3. Push to `main` or `staging` branch to trigger deploy
+4. Or manually trigger from GitHub → Actions → Deploy Workers → Run workflow
+
+#### Deploy Locally (Alternative)
+
+```bash
+cd srv
+npm run deploy
+```
+
+Or deploy to specific environment:
+```bash
+npm run deploy:staging  # Deploy to staging
+npm run deploy:prod     # Deploy to production
+```
+
+---
+
+### 3. Frontend (Pages)
+
+#### Configure Environment
+
+Copy and configure `app/.env.example`:
+
+```bash
+cp app/.env.example app/.env
+```
+
+Edit `app/.env`:
+```env
+# Production: Workers URL after deployment
+VITE_API_URL=https://your-workers-domain.workers.dev
+```
+
+#### Build & Deploy via GitHub
+
+1. Push to `main` branch (or merge staging to main)
+2. In Cloudflare Dashboard → Pages → regarded
+3. Configure:
+
+| Setting | Value |
+|---------|-------|
+| Production branch | `main` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Root directory | `app` |
+
+4. Add custom domain (optional)
+
+#### Local Development
+
+```bash
+# Frontend only (needs workers running)
+cd app
+npm run dev
+
+# Or with local workers proxy
+cd app
+VITE_API_URL=http://localhost:8787 npm run dev
+```
+
+---
+
+### 4. Environment Variables Summary
+
+| Variable | Where | Description |
+|----------|-------|-------------|
+| `GOOGLE_CLIENT_ID` | Workers (secret) | Google OAuth Client ID |
+| `GOOGLE_CLIENT_SECRET` | Workers (secret) | Google OAuth Client Secret |
+| `JWT_SECRET` | Workers (secret) | Secret for JWT tokens |
+| `VITE_API_URL` | Frontend (.env) | Workers API URL |
+
+---
+
+### 5. Database Migrations
+
+After deploying workers, run D2 migrations:
+
+```bash
+cd srv
+npx wrangler d1 migrations apply regarded-db
+```
+
+---
+
+### Quick Deploy Commands
+
+```bash
+# Full deploy (both)
+cd srv && npm run deploy                    # Backend
+# Then trigger Pages deploy via GitHub push
+
+# Or from root
+npm run build:frontend                     # Build frontend
+cd srv && npm run deploy                   # Deploy backend
+```
+
 ## Tech Stack
 
 - **Runtime**: Cloudflare Workers
@@ -113,3 +315,4 @@ await engine.evaluateRule(rule, context);
 ## License
 
 MIT
+

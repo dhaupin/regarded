@@ -236,6 +236,7 @@ export interface PatternOptions {
   min_height?: number;
   lookback?: number;
   threshold?: number;
+  type?: 'symmetrical' | 'ascending' | 'descending';
 }
 
 export interface PatternResult {

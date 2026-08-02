@@ -7,8 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Spin, Select, Checkbox } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiGet, apiDelete } from '@/lib/api';
 
 interface Connector {
   id: string;
@@ -26,20 +25,15 @@ export function ConnectorsList() {
   const [modeFilter, setModeFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const fetchConnectors = () => {
-    fetch(`${API_URL}/connectors`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setConnectors(data.data?.items || []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+  const fetchConnectors = async () => {
+    try {
+      const data = await apiGet<{ items: Connector[] }>('/connectors');
+      setConnectors(data.items || []);
+    } catch (error) {
+      console.error('Failed to fetch connectors:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -84,21 +78,11 @@ export function ConnectorsList() {
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`${API_URL}/connectors/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
-      
-      if (res.ok) {
-        message.success('Connector deleted');
-        setConnectors(connectors.filter(c => c.id !== id));
-        setSelectedIds(prev => prev.filter(i => i !== id));
-      } else {
-        message.error('Failed to delete connector');
-      }
-    } catch {
+      await apiDelete(`/connectors/${id}`);
+      message.success('Connector deleted');
+      setConnectors(connectors.filter(c => c.id !== id));
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    } catch (error) {
       message.error('Failed to delete connector');
     }
   };
@@ -106,13 +90,12 @@ export function ConnectorsList() {
   const handleBulkDelete = async () => {
     const results = await Promise.all(
       selectedIds.map(async (id) => {
-        const res = await fetch(`${API_URL}/connectors/${id}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-          },
-        });
-        return res.ok;
+        try {
+          await apiDelete(`/connectors/${id}`);
+          return true;
+        } catch {
+          return false;
+        }
       })
     );
 

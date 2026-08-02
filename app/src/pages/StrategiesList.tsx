@@ -7,8 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Spin, Select, Checkbox } from 'antd';
 import { PlusOutlined, ThunderboltOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { message } from 'antd';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiGet, apiPut, apiDelete } from '@/lib/api';
 
 interface Strategy {
   id: string;
@@ -25,20 +24,15 @@ export function StrategiesList() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const fetchStrategies = () => {
-    fetch(`${API_URL}/strategies`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setStrategies(data.data?.items || []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+  const fetchStrategies = async () => {
+    try {
+      const data = await apiGet<{ items: Strategy[] }>('/strategies');
+      setStrategies(data.items || []);
+    } catch (error) {
+      console.error('Failed to fetch strategies:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -81,20 +75,10 @@ export function StrategiesList() {
 
   const handleDelete = async (id: string, _name: string) => {
     try {
-      const res = await fetch(`${API_URL}/strategies/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
-      
-      if (res.ok) {
-        message.success('Strategy deleted');
-        setStrategies(strategies.filter(s => s.id !== id));
-        setSelectedIds(prev => prev.filter(i => i !== id));
-      } else {
-        message.error('Failed to delete strategy');
-      }
+      await apiDelete(`/strategies/${id}`);
+      message.success('Strategy deleted');
+      setStrategies(strategies.filter(s => s.id !== id));
+      setSelectedIds(prev => prev.filter(i => i !== id));
     } catch {
       message.error('Failed to delete strategy');
     }
@@ -103,13 +87,12 @@ export function StrategiesList() {
   const handleBulkDelete = async () => {
     const results = await Promise.all(
       selectedIds.map(async (id) => {
-        const res = await fetch(`${API_URL}/strategies/${id}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-          },
-        });
-        return res.ok;
+        try {
+          await apiDelete(`/strategies/${id}`);
+          return true;
+        } catch {
+          return false;
+        }
       })
     );
 
@@ -126,15 +109,12 @@ export function StrategiesList() {
   const handleBulkToggle = async (enable: boolean) => {
     const results = await Promise.all(
       selectedIds.map(async (id) => {
-        const res = await fetch(`${API_URL}/strategies/${id}`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ enabled: enable }),
-        });
-        return res.ok;
+        try {
+          await apiPut(`/strategies/${id}`, { enabled: enable });
+          return true;
+        } catch {
+          return false;
+        }
       })
     );
 

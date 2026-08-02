@@ -7,8 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from 'antd';
 import { message } from 'antd';
 import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiPost } from '@/lib/api';
 
 interface FormErrors {
   label?: string;
@@ -59,24 +58,14 @@ export function ConnectorsCreate() {
     setTestResult(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${API_URL}/connectors/test`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          exchange: formData.exchange,
-          apiKey: formData.apiKey,
-          apiSecret: formData.apiSecret,
-          paperMode: formData.paperMode,
-        }),
+      const data = await apiPost<{ success: boolean; error?: { message: string } }>('/connectors/test', {
+        exchange: formData.exchange,
+        apiKey: formData.apiKey,
+        apiSecret: formData.apiSecret,
+        paperMode: formData.paperMode,
       });
-
-      const data = await response.json();
       
-      if (response.ok && data.success) {
+      if (data.success) {
         setTestResult({ success: true, message: 'Connection successful!' });
         message.success('Connection test passed');
       } else {
@@ -102,23 +91,13 @@ export function ConnectorsCreate() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${API_URL}/connectors`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
+      const data = await apiPost<{ success: boolean }>('/connectors', formData);
       
-      if (response.ok && data.success) {
+      if (data && (data as any).success) {
         message.success('Connector created successfully');
         navigate('/connectors');
       } else {
-        message.error(data.error?.message || 'Failed to create connector');
+        message.error('Failed to create connector');
       }
     } catch (error) {
       message.error('Failed to create connector');

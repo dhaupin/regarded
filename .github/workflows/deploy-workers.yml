@@ -1,0 +1,63 @@
+name: Deploy Workers
+
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+    inputs:
+      worker_name:
+        description: 'Worker name override'
+        required: false
+        default: ''
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Install Dependencies
+        working-directory: ./srv
+        run: npm install
+
+      - name: Build
+        working-directory: ./srv
+        run: npm run build
+
+      - name: Deploy to Cloudflare (staging)
+        if: github.ref == 'refs/heads/staging'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          workingDirectory: ./srv
+          command: deploy -c providers/cloudflare/wrangler.toml --env staging ${{ github.event.inputs.worker_name != '' && format('--name {0}', github.event.inputs.worker_name) || '' }}
+        env:
+          CF_D1_NAME: ${{ secrets.CF_D1_NAME }}
+          CF_D1_ID: ${{ secrets.CF_D1_ID }}
+          CF_KV_ID: ${{ secrets.CF_KV_ID }}
+
+      - name: Deploy to Cloudflare (production)
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          workingDirectory: ./srv
+          command: deploy -c providers/cloudflare/wrangler.toml --env production ${{ github.event.inputs.worker_name != '' && format('--name {0}', github.event.inputs.worker_name) || '' }}
+        env:
+          CF_D1_NAME: ${{ secrets.CF_D1_NAME }}
+          CF_D1_ID: ${{ secrets.CF_D1_ID }}
+          CF_KV_ID: ${{ secrets.CF_KV_ID }}

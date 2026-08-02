@@ -458,31 +458,55 @@ VITE_GOOGLE_CLIENT_ID=...
 
 ---
 
-## Common Development Tasks
+## Deployment
 
-### Running Locally
+### Cloudflare Resources
+Create in Cloudflare dashboard:
+- D1 Database: `regarded-db`
+- KV Namespace: `regarded-kv`
+
+### GitHub Secrets
+Set these in GitHub → Settings → Secrets and variables → Actions:
+
+| Secret | Description |
+|--------|-------------|
+| `CF_ACCOUNT_ID` | Cloudflare Account ID |
+| `CF_API_TOKEN` | Cloudflare API Token (Edit Workers > API Tokens > Create Custom Token) |
+| `CF_D1_NAME` | D1 Database name (e.g., "regarded-db") |
+| `CF_D1_ID` | D1 Database ID (from dashboard) |
+| `CF_KV_ID` | KV Namespace ID (from dashboard) |
+
+### Frontend (Pages)
+Cloudflare Pages deploys automatically on push to staging/main.
+
+Settings:
+- Build command: `npm run build`
+- Build output: `dist`
+- Root directory: `app`
+
+### Backend (Workers)
+Workers deploy via GitHub Actions (`.github/workflows/deploy-workers.yml`).
+
+D1/KV IDs are injected via environment variables - wrangler.toml uses `${CF_D1_ID}` and `${CF_KV_ID}`.
+
+Trigger: Push to staging/main OR manually from GitHub → Actions → Deploy Workers
+
+### Local Development
 ```bash
+# Set env vars locally
+export CF_D1_ID=your-d1-id
+export CF_KV_ID=your-kv-id
+
 # Frontend
-cd frontend && npm run dev
+cd app && npm run dev
 
 # Backend (with Wrangler)
-cd backend && npx wrangler dev
-
-# Both with tunnel for OAuth
+cd srv && npx wrangler dev -c providers/cloudflare/wrangler.toml
 ```
 
 ### Database Migrations
 ```bash
-cd backend && npx wrangler d1 migrations apply regarded-db
-```
-
-### Deployment
-```bash
-# Backend
-cd backend && npx wrangler deploy
-
-# Frontend
-cd frontend && npm run build && npx wrangler pages deploy frontend/dist
+cd srv && npx wrangler d1 migrations apply regarded-db
 ```
 
 ---
@@ -527,5 +551,5 @@ Vant (https://github.com/AI-H虔u/vant) is a memory/experience system for AI age
 
 ---
 
-*Last Updated: 2026-07-29*
-*Version: 0.1.0*
+*Last Updated: 2026-08-02*
+*Version: 0.2.0*
