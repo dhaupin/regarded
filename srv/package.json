@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "esbuild src/app.ts --bundle --outfile=dist/worker.js --format=esm --platform=cloudflare --external:*.png --external:*.jpg --external:*.svg",
+    "build": "esbuild src/app.ts --bundle --outfile=dist/worker.js --format=esm --platform=neutral --external:*.png --external:*.jpg --external:*.svg",
     "dev": "wrangler dev -c providers/cloudflare/wrangler.toml",
     "deploy": "npm run build && wrangler deploy -c providers/cloudflare/wrangler.toml",
     "deploy:staging": "npm run build && wrangler deploy -c providers/cloudflare/wrangler.toml --env staging",
