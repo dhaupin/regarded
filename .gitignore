@@ -32,3 +32,4 @@ coverage/
 # Cache
 .cache/
 *.tsbuildinfo
+.prestruct/
