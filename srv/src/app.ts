@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { timing } from 'hono/timing';
-import { cookie } from 'hono/cookie';
+// Cookie middleware - built into Hono v4
 import type { Context } from 'hono';
 
 // Import routes
@@ -40,7 +40,7 @@ app.use('*', cors({
 app.use('*', logger());
 
 // Cookie parser
-app.use('*', cookie());
+app.use('*');
 
 // ============================================================================
 // Routes

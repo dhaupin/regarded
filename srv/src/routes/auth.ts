@@ -7,7 +7,7 @@
 
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { createCookie } from 'hono/cookie';
+// createCookie - built into Hono v4 Context
 import { get as getSecret } from '../../../lib/secrets';
 
 // JWT Secret from environment (using secrets module)
