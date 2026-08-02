@@ -6,14 +6,14 @@
 #
 # Worker name - override via CLI: wrangler deploy --name your-worker-name
 
-main = "dist/worker.js"
+main = "../dist/worker.js"
 compatibility_date = "2024-01-01"
 node_compat = true
 
-# D1 Database - IDs from CF_D1_ID env var
+# D1 Database - IDs from CF secrets
 [[d1_databases]]
 binding = "DB"
-database_name = "regarded-db"
+database_name = "${CF_D1_NAME}"
 database_id = "${CF_D1_ID}"
 
 # KV Namespace - ID from CF_KV_ID env var
