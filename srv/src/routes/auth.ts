@@ -8,7 +8,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { createCookie } from 'hono/cookie';
-import { get as getSecret } from '../../lib/secrets';
+import { get as getSecret } from '../../../lib/secrets';
 
 // JWT Secret from environment (using secrets module)
 async function getJWTSecret(env: Env): Promise<string> {
