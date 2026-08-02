@@ -4,6 +4,11 @@ on:
   push:
     branches: [main, staging]
   workflow_dispatch:
+    inputs:
+      worker_name:
+        description: 'Worker name override'
+        required: false
+        default: ''
 
 jobs:
   deploy:
@@ -30,16 +35,21 @@ jobs:
       - name: Build
         working-directory: ./srv
         run: npm run build
-        env:
-          # Secrets must be set in GitHub repo settings
-          # See: https://github.com/cloudflare/wrangler-action
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
 
-      - name: Deploy to Cloudflare
+      - name: Deploy to Cloudflare (staging)
+        if: github.ref == 'refs/heads/staging'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           workingDirectory: ./srv
-          command: deploy -c providers/cloudflare/wrangler.toml
+          command: deploy -c providers/cloudflare/wrangler.toml --env staging ${{ github.event.inputs.worker_name != '' && format('--name {0}', github.event.inputs.worker_name) || '' }}
+
+      - name: Deploy to Cloudflare (production)
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          workingDirectory: ./srv
+          command: deploy -c providers/cloudflare/wrangler.toml --env production ${{ github.event.inputs.worker_name != '' && format('--name {0}', github.event.inputs.worker_name) || '' }}

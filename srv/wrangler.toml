@@ -1,27 +1,28 @@
 # Regarded Backend - Cloudflare Workers
 # 
-# IMPORTANT: Copy providers/cloudflare/wrangler.toml to srv/wrangler.toml
-# and update with your actual KV/D1 IDs before deploying.
+# SETUP FOR USERS:
+# 1. Create D1 database: npx wrangler d1 create regarded-db
+# 2. Create KV namespace: npx wrangler kv namespace create regarded-kv  
+# 3. Uncomment and add database_id and KV id below
+# 4. Set secrets: npx wrangler secret put GOOGLE_CLIENT_ID (etc)
 #
-# See providers/cloudflare/ for the full configuration with staging/prod environments.
+# Worker name - override in your fork or CLI args:
+#   wrangler deploy --name your-worker-name
 
-name = "regarded"
 main = "src/app.ts"
 compatibility_date = "2024-01-01"
 node_compat = true
 
-# D2 Database
-# Replace with your actual database_id after: npx wrangler d1 create regarded-db
-[[d1_databases]]
-binding = "DB"
-database_name = "regarded-db"
-database_id = "your-database-id-here"
+# D2 Database - uncomment after creating:
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "regarded-db"
+# database_id = "your-database-id"
 
-# KV Namespace for sessions, cache, configs
-# Replace with your actual KV id after: npx wrangler kv namespace create regarded-kv
-[[kv_namespaces]]
-binding = "KV"
-id = "your-kv-namespace-id-here"
+# KV Namespace - uncomment after creating:
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "your-kv-namespace-id"
 
 # Environment variables (set via: npx wrangler secret put <name>)
 # GOOGLE_CLIENT_ID
