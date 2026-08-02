@@ -129,28 +129,48 @@ Create these resources in Cloudflare dashboard:
 
 #### Configure wrangler.toml
 
-Update `srv/providers/cloudflare/wrangler.toml` with your actual IDs:
+The wrangler.toml uses environment variables for D1/KV IDs (update-safe for forks):
 
 ```toml
+# srv/providers/cloudflare/wrangler.toml
+main = "../../dist/worker.js"
+
 [[d1_databases]]
 binding = "DB"
-database_name = "regarded-db"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # From dashboard
+database_name = "${CF_D1_NAME}"
+database_id = "${CF_D1_ID}"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # From dashboard
+id = "${CF_KV_ID}"
 ```
+
+IDs are injected via GitHub secrets or local env vars.
 
 #### Set Secrets
 
+**GitHub Secrets (for CI/CD):**
+Set these in GitHub → Settings → Secrets → Actions:
+
+| Secret | Description |
+|--------|-------------|
+| `CF_ACCOUNT_ID` | Cloudflare Account ID |
+| `CF_API_TOKEN` | Cloudflare API Token |
+| `CF_D1_NAME` | D1 database name (e.g., "regarded-db") |
+| `CF_D1_ID` | D1 database ID (from Cloudflare dashboard) |
+| `CF_KV_ID` | KV namespace ID (from Cloudflare dashboard) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `JWT_SECRET` | JWT signing secret |
+
+**Local Development:**
 ```bash
 cd srv
+export CF_D1_NAME=regarded-db
+export CF_D1_ID=your-d1-id
+export CF_KV_ID=your-kv-id
 
-# Login to Cloudflare (if not already)
-npx wrangler login
-
-# Set required secrets (replace with your values)
+# Set secrets locally
 npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
 npx wrangler secret put JWT_SECRET

@@ -472,6 +472,7 @@ Set these in GitHub → Settings → Secrets and variables → Actions:
 |--------|-------------|
 | `CF_ACCOUNT_ID` | Cloudflare Account ID |
 | `CF_API_TOKEN` | Cloudflare API Token (Edit Workers > API Tokens > Create Custom Token) |
+| `CF_D1_NAME` | D1 Database name (e.g., "regarded-db") |
 | `CF_D1_ID` | D1 Database ID (from dashboard) |
 | `CF_KV_ID` | KV Namespace ID (from dashboard) |
 
