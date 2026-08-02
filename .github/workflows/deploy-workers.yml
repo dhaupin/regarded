@@ -44,6 +44,9 @@ jobs:
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           workingDirectory: ./srv
           command: deploy -c providers/cloudflare/wrangler.toml --env staging ${{ github.event.inputs.worker_name != '' && format('--name {0}', github.event.inputs.worker_name) || '' }}
+        env:
+          CF_D1_ID: ${{ secrets.CF_D1_ID }}
+          CF_KV_ID: ${{ secrets.CF_KV_ID }}
 
       - name: Deploy to Cloudflare (production)
         if: github.ref == 'refs/heads/main'
@@ -53,3 +56,6 @@ jobs:
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           workingDirectory: ./srv
           command: deploy -c providers/cloudflare/wrangler.toml --env production ${{ github.event.inputs.worker_name != '' && format('--name {0}', github.event.inputs.worker_name) || '' }}
+        env:
+          CF_D1_ID: ${{ secrets.CF_D1_ID }}
+          CF_KV_ID: ${{ secrets.CF_KV_ID }}

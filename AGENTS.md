@@ -465,6 +465,16 @@ Create in Cloudflare dashboard:
 - D1 Database: `regarded-db`
 - KV Namespace: `regarded-kv`
 
+### GitHub Secrets
+Set these in GitHub → Settings → Secrets and variables → Actions:
+
+| Secret | Description |
+|--------|-------------|
+| `CF_ACCOUNT_ID` | Cloudflare Account ID |
+| `CF_API_TOKEN` | Cloudflare API Token (Edit Workers > API Tokens > Create Custom Token) |
+| `CF_D1_ID` | D1 Database ID (from dashboard) |
+| `CF_KV_ID` | KV Namespace ID (from dashboard) |
+
 ### Frontend (Pages)
 Cloudflare Pages deploys automatically on push to staging/main.
 
@@ -476,14 +486,16 @@ Settings:
 ### Backend (Workers)
 Workers deploy via GitHub Actions (`.github/workflows/deploy-workers.yml`).
 
-Required secrets (GitHub → Settings → Secrets):
-- `CF_ACCOUNT_ID` - Cloudflare Account ID
-- `CF_API_TOKEN` - Cloudflare API Token
+D1/KV IDs are injected via environment variables - wrangler.toml uses `${CF_D1_ID}` and `${CF_KV_ID}`.
 
 Trigger: Push to staging/main OR manually from GitHub → Actions → Deploy Workers
 
 ### Local Development
 ```bash
+# Set env vars locally
+export CF_D1_ID=your-d1-id
+export CF_KV_ID=your-kv-id
+
 # Frontend
 cd app && npm run dev
 
