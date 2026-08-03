@@ -4,9 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Button } from 'antd';
-import { message } from 'antd';
-import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
 import { apiPost } from '@/lib/api';
 
 interface FormErrors {
@@ -17,6 +17,7 @@ interface FormErrors {
 
 export function ConnectorsCreate() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{success: boolean; message: string} | null>(null);
@@ -50,7 +51,7 @@ export function ConnectorsCreate() {
 
   const handleTestConnection = async () => {
     if (!formData.apiKey.trim() || !formData.apiSecret.trim()) {
-      message.error('Please enter API key and secret first');
+      toast({ title: 'Error', description: 'Please enter API key and secret first', variant: 'destructive' });
       return;
     }
 
@@ -67,14 +68,14 @@ export function ConnectorsCreate() {
       
       if (data.success) {
         setTestResult({ success: true, message: 'Connection successful!' });
-        message.success('Connection test passed');
+        toast({ title: 'Success', description: 'Connection test passed', variant: 'success' });
       } else {
         setTestResult({ success: false, message: data.error?.message || 'Connection failed' });
-        message.error(data.error?.message || 'Connection test failed');
+        toast({ title: 'Error', description: data.error?.message || 'Connection test failed', variant: 'destructive' });
       }
     } catch (error) {
       setTestResult({ success: false, message: 'Connection test failed' });
-      message.error('Connection test failed');
+      toast({ title: 'Error', description: 'Connection test failed', variant: 'destructive' });
     } finally {
       setTesting(false);
     }
@@ -84,7 +85,7 @@ export function ConnectorsCreate() {
     e.preventDefault();
     
     if (!validate()) {
-      message.error('Please fix the errors above');
+      toast({ title: 'Error', description: 'Please fix the errors above', variant: 'destructive' });
       return;
     }
     
@@ -94,13 +95,13 @@ export function ConnectorsCreate() {
       const data = await apiPost<{ success: boolean }>('/connectors', formData);
       
       if (data && (data as any).success) {
-        message.success('Connector created successfully');
+        toast({ title: 'Success', description: 'Connector created successfully', variant: 'success' });
         navigate('/connectors');
       } else {
-        message.error('Failed to create connector');
+        toast({ title: 'Error', description: 'Failed to create connector', variant: 'destructive' });
       }
     } catch (error) {
-      message.error('Failed to create connector');
+      toast({ title: 'Error', description: 'Failed to create connector', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -110,10 +111,11 @@ export function ConnectorsCreate() {
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-4">
         <Button 
-          type="text" 
-          icon={<ArrowLeftOutlined />} 
+          variant="ghost" 
+          size="sm"
           onClick={() => navigate('/connectors')}
         >
+          <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
         <div>
@@ -221,14 +223,13 @@ export function ConnectorsCreate() {
                 <Button 
                   type="default" 
                   onClick={handleTestConnection}
-                  loading={testing}
                   disabled={!formData.apiKey || !formData.apiSecret}
                 >
-                  Test Connection
+                  {testing ? 'Testing...' : 'Test Connection'}
                 </Button>
                 {testResult && (
                   <span className={`flex items-center gap-1 ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
-                    {testResult.success ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                    {testResult.success ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                     {testResult.message}
                   </span>
                 )}
@@ -236,10 +237,10 @@ export function ConnectorsCreate() {
             </div>
 
             <div className="flex gap-2 pt-4">
-              <Button type="primary" htmlType="submit" loading={loading}>
-                Create Connector
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Creating...' : 'Create Connector'}
               </Button>
-              <Button variant="outlined" onClick={() => navigate('/connectors')}>
+              <Button variant="outline" onClick={() => navigate('/connectors')}>
                 Cancel
               </Button>
             </div>
