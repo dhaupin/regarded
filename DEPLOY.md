@@ -12,12 +12,21 @@ Detailed instructions for deploying Regarded to Cloudflare.
 
 ## 1. Cloudflare Resources
 
-Create these resources in the Cloudflare dashboard:
+Create these resources in the Cloudflare dashboard **before setting up secrets**:
 
 | Resource | Type | Name |
 |----------|------|------|
 | D2 Database | D1 | `regarded-db` |
 | KV Namespace | KV | `regarded-kv` |
+
+### Getting Resource IDs
+
+After creating resources, get their IDs from the dashboard:
+
+- **D1 Database ID**: Found in the database details page URL: `https://dash.cloudflare.com/<account>/d1/<database-id>`
+- **KV Namespace ID**: Found in KV → namespace details page URL: `https://dash.cloudflare.com/<account>/kv/namespaces/<namespace-id>`
+
+You'll need these IDs for the GitHub secrets below.
 
 ---
 
@@ -137,6 +146,25 @@ npm run deploy:prod     # Deploy to production
 
 ## 3. Frontend (Pages)
 
+### Create Pages Project
+
+If you haven't already, create the Pages project in Cloudflare:
+
+1. Go to Cloudflare Dashboard → Pages
+2. Connect to GitHub and select your repository
+3. Configure:
+
+| Setting | Value |
+|---------|-------|
+| Production branch | `main` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Root directory | `app` |
+
+4. Add custom domain (optional)
+
+Cloudflare will automatically build and deploy on push to `main` (no GitHub Actions needed).
+
 ### Configure Environment
 
 The frontend needs to know the Workers API URL. You can set this in multiple ways:
@@ -171,20 +199,9 @@ VITE_API_URL=https://your-workers-domain.workers.dev
 
 > ⚠️ **Important**: Never commit `.env` files to version control. Add `app/.env` to `.gitignore`.
 
-### Build & Deploy via GitHub
+### Trigger Deploy
 
-1. Push to `main` branch (or merge staging to main)
-2. In Cloudflare Dashboard → Pages → regarded
-3. Configure:
-
-| Setting | Value |
-|---------|-------|
-| Production branch | `main` |
-| Build command | `npm run build` |
-| Build output directory | `dist` |
-| Root directory | `app` |
-
-4. Add custom domain (optional)
+Push to `main` branch (or merge staging to main) to trigger Cloudflare's auto-build and deploy.
 
 ### Local Development
 
