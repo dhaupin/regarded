@@ -2,7 +2,7 @@
 
 ## Project Context
 
-Regarded is a KISS/DRY crypto trading bot platform that executes paper and live trades based on technical indicators and custom rulesets. It targets the Cloudflare free tier.
+Regarded is a KISS/DRY crypto trading agent platform that executes paper and live trades based on technical indicators and custom rulesets. It targets the Cloudflare free tier.
 
 **Repository:** `regarded.creadev.org`  
 **Tech Stack:** Vite/React (frontend), Cloudflare Workers/Hono (backend), D2 (database), KV (cache)  
@@ -41,6 +41,8 @@ lib/
 ├── psy.ts            # Market psychology analysis
 ├── connectors/       # Individual connectors
 │   ├── base.ts       # BaseConnector class
+│   ├── binance.ts    # Binance exchange
+│   ├── coinbase.ts   # Coinbase exchange
 │   ├── kraken.ts     # Kraken exchange
 │   ├── solana.ts     # Solana wallet
 │   └── jupiter.ts    # Jupiter aggregator
@@ -53,7 +55,7 @@ lib/
 
 srv/                  # Cloudflare Workers server
 ├── src/
-│   ├── index.ts      # Hono app entry
+│   ├── app.ts       # Hono app entry
 │   ├── env.ts        # Environment types
 │   └── routes/       # API route handlers
 │       ├── auth.ts   # Auth endpoints
@@ -62,25 +64,9 @@ srv/                  # Cloudflare Workers server
 ├── migrations/       # D2 schema migrations
 └── wrangler.toml    # Workers config
 
-app/                  # Frontend placeholder (Vite/React)
+app/                  # Frontend (Vite/React)
 test/                 # Test files (*.test.ts)
 ```
-
-### Quick Imports
-```typescript
-import { createConnector, createRulesEngine, calculateIndicator, events, LRUCache, Router, json, success, error } from './lib/regarded';
-```
-
-### NPM Scripts
-```bash
-npm test          # Run all tests
-npm run typecheck # TypeScript check
-npm run lint      # ESLint
-npm run lint:fix # Auto-fix lint issues
-```
-
-### Git Hooks
-- Pre-commit: runs `tsc --noEmit` to check types before commit
 
 ---
 
@@ -460,54 +446,7 @@ VITE_GOOGLE_CLIENT_ID=...
 
 ## Deployment
 
-### Cloudflare Resources
-Create in Cloudflare dashboard:
-- D1 Database: `regarded-db`
-- KV Namespace: `regarded-kv`
-
-### GitHub Secrets
-Set these in GitHub → Settings → Secrets and variables → Actions:
-
-| Secret | Description |
-|--------|-------------|
-| `CF_ACCOUNT_ID` | Cloudflare Account ID |
-| `CF_API_TOKEN` | Cloudflare API Token (Edit Workers > API Tokens > Create Custom Token) |
-| `CF_D1_NAME` | D1 Database name (e.g., "regarded-db") |
-| `CF_D1_ID` | D1 Database ID (from dashboard) |
-| `CF_KV_ID` | KV Namespace ID (from dashboard) |
-
-### Frontend (Pages)
-Cloudflare Pages deploys automatically on push to staging/main.
-
-Settings:
-- Build command: `npm run build`
-- Build output: `dist`
-- Root directory: `app`
-
-### Backend (Workers)
-Workers deploy via GitHub Actions (`.github/workflows/deploy-workers.yml`).
-
-D1/KV IDs are injected via environment variables - wrangler.toml uses `${CF_D1_ID}` and `${CF_KV_ID}`.
-
-Trigger: Push to staging/main OR manually from GitHub → Actions → Deploy Workers
-
-### Local Development
-```bash
-# Set env vars locally
-export CF_D1_ID=your-d1-id
-export CF_KV_ID=your-kv-id
-
-# Frontend
-cd app && npm run dev
-
-# Backend (with Wrangler)
-cd srv && npx wrangler dev -c providers/cloudflare/wrangler.toml
-```
-
-### Database Migrations
-```bash
-cd srv && npx wrangler d1 migrations apply regarded-db
-```
+See [DEPLOY.md](./DEPLOY.md) for detailed deployment instructions.
 
 ---
 
@@ -518,36 +457,6 @@ cd srv && npx wrangler d1 migrations apply regarded-db
 - 5GB D2 storage
 - No websockets (use polling)
 - Cold starts on Workers
-
----
-
-## Roadmap & Integrations
-
-### Vant Integration (Priority: High)
-Vant (https://github.com/AI-H虔u/vant) is a memory/experience system for AI agents.
-
-**Goals:**
-- Store agent experiences and learnings
-- Session persistence across restarts
-- Strategy performance tracking
-- Guard/Rules configuration versioning
-
-**Implementation Ideas:**
-- Create `lib/vant.ts` adapter
-- Store guard configs in Vant memory
-- Track strategy performance metrics
-- Persist agent state across deployments
-
----
-
-## Future Considerations
-
-- Python engine for complex analysis
-- Rust engine for HFT
-- Backtesting module
-- Multi-sig wallet support
-- Telegram/Discord notifications
-- Vant memory integration
 
 ---
 

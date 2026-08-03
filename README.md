@@ -1,6 +1,6 @@
 # Regarded
 
-A KISS/DRY crypto trading bot platform that executes paper and live trades based on technical indicators and custom rulesets. Built for Cloudflare's free tier.
+A KISS/DRY crypto trading agent platform that executes paper and live trades based on technical indicators and custom rulesets. Built for Cloudflare's free tier.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-Workers-orange)
@@ -8,7 +8,7 @@ A KISS/DRY crypto trading bot platform that executes paper and live trades based
 
 ## Features
 
-- **Multi-Exchange Support**: Kraken, Solana, Jupiter connectors
+- **Multi-Exchange Support**: Binance, Coinbase, Kraken, Solana, Jupiter
 - **Technical Indicators**: RSI, KDJ, Bollinger Bands, MACD
 - **Pattern Detection**: Humps, divergence, crossovers, and more
 - **Advanced Rules Engine**: Multi-timeframe conditions, rule chaining, risk modifiers
@@ -35,274 +35,52 @@ npm run lint
 ## Architecture
 
 ```
-lib/                     # Core trading engine
+lib/                     # Core trading library (~40 modules)
 ├── regarded.ts          # Main entry point
-├── types.ts            # All TypeScript interfaces
-├── error.ts            # Error codes, factory, utilities
-├── encrypt.ts          # AES-256-GCM encryption
-├── audit.ts            # Audit logging
-├── waf.ts              # Rate limiting, IP blocking
-├── qos.ts              # Circuit breaker, rate limiter
-├── network.ts          # HTTP client with retry
-├── scheduler.ts        # Cron scheduler
-├── auth.ts             # JWT, OAuth, sessions
-├── config.ts           # Config registry, secrets
-├── storage.ts          # KV cache
-├── cache.ts            # LRU cache with TTL
-├── event.ts            # Event emitter
-├── api.ts              # HTTP handlers
+├── types.ts            # Shared TypeScript interfaces
+├── connectors/         # Exchange connectors
+│   ├── base.ts        # Base connector class
+│   ├── binance.ts     # Binance
+│   ├── coinbase.ts    # Coinbase
+│   ├── kraken.ts      # Kraken
+│   ├── solana.ts      # Solana
+│   └── jupiter.ts     # Jupiter
+├── adapters/           # Notification adapters
+│   ├── telegram.ts    # Telegram
+│   ├── discord.ts    # Discord
+│   ├── slack.ts      # Slack
+│   └── webhook.ts    # Webhooks
 ├── indicators.ts       # RSI, KDJ, Bollinger, MACD
-├── patterns.ts         # Pattern detection
-├── rules.ts            # Rules engine
-├── notify.ts           # Canonical notification handler
-├── runner.ts           # Trading agent runner
-├── portfolio.ts        # Position & portfolio management
+├── patterns.ts        # Humps, divergence, crossovers
+├── rules.ts           # Rules engine
+├── portfolio.ts       # Position management
 ├── guard.ts           # Risk guardrails
-├── psy.ts             # Market psychology analysis
-├── connectors/        # Exchange connectors
-│   ├── base.ts       # Base connector class
-│   ├── kraken.ts     # Kraken exchange
-│   ├── solana.ts     # Solana wallet
-│   └── jupiter.ts    # Jupiter aggregator
-└── adapters/         # Notification adapters
-    ├── base.ts       # Base adapter class, registry
-    ├── telegram.ts   # Telegram adapter
-    ├── discord.ts   # Discord adapter
-    ├── slack.ts     # Slack adapter
-    └── webhook.ts   # Generic webhook adapter
+└── ...                # Auth, encryption, cache, network, etc.
 
 srv/                    # Cloudflare Workers server
 ├── src/
-│   ├── index.ts      # Hono app entry
-│   ├── env.ts        # Environment types
-│   └── routes/       # API route handlers
-│       ├── auth.ts   # Auth endpoints
-│       ├── api.ts    # Main API
-│       └── webhooks.ts # Webhook handlers
-├── migrations/       # D2 schema migrations
-└── wrangler.toml    # Workers config
+│   ├── app.ts         # Hono app entry
+│   ├── env.ts         # Environment types
+│   └── routes/        # API routes (auth, api, webhooks)
+└── providers/         # Provider-specific configs
 
-app/                    # Frontend placeholder (Vite/React)
-```
-
-## Example Usage
-
-```typescript
-import { createConnector, createRulesEngine, calculateIndicator } from './lib/regarded';
-
-// Create exchange connector
-const connector = await createConnector('kraken');
-await connector.connect({ apiKey: '...', secret: '...' });
-
-// Calculate indicator
-const candles = await connector.getCandles('SOL/USD', '5m', 100);
-const rsi = calculateIndicator('rsi', candles, { period: 14 });
-
-// Create rules engine
-const engine = createRulesEngine({ maxChainDepth: 3 });
-await engine.evaluateRule(rule, context);
+app/                    # Frontend (Vite/React)
+└── src/
+    ├── App.tsx       # Main app
+    └── pages/        # Dashboard, Strategies, Trades, etc.
 ```
 
 ## Deployment
 
-This guide covers deploying to Cloudflare Pages (frontend) and Cloudflare Workers (backend).
+See [DEPLOY.md](./DEPLOY.md) for detailed deployment instructions.
 
-### Prerequisites
-
-- Cloudflare account
-- Node.js 18+
-
----
-
-### 1. Cloudflare Resources
-
-Create these resources in Cloudflare dashboard:
-
-| Resource | Type | Name |
-|----------|------|------|
-| D2 Database | D1 | `regarded-db` |
-| KV Namespace | KV | `regarded-kv` |
-
----
-
-### 2. Backend (Workers)
-
-#### Configure wrangler.toml
-
-The wrangler.toml uses environment variables for D1/KV IDs (update-safe for forks):
-
-```toml
-# srv/providers/cloudflare/wrangler.toml
-main = "../../dist/worker.js"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "${CF_D1_NAME}"
-database_id = "${CF_D1_ID}"
-
-[[kv_namespaces]]
-binding = "KV"
-id = "${CF_KV_ID}"
-```
-
-IDs are injected via GitHub secrets or local env vars.
-
-#### Set Secrets
-
-**GitHub Secrets (for CI/CD):**
-Set these in GitHub → Settings → Secrets → Actions:
-
-| Secret | Description |
-|--------|-------------|
-| `CF_ACCOUNT_ID` | Cloudflare Account ID |
-| `CF_API_TOKEN` | Cloudflare API Token |
-| `CF_D1_NAME` | D1 database name (e.g., "regarded-db") |
-| `CF_D1_ID` | D1 database ID (from Cloudflare dashboard) |
-| `CF_KV_ID` | KV namespace ID (from Cloudflare dashboard) |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
-| `JWT_SECRET` | JWT signing secret |
-
-**Local Development:**
-```bash
-cd srv
-export CF_D1_NAME=regarded-db
-export CF_D1_ID=your-d1-id
-export CF_KV_ID=your-kv-id
-
-# Set secrets locally
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
-npx wrangler secret put JWT_SECRET
-```
-
-**Getting Google OAuth credentials:**
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a project → APIs & Services → Credentials
-3. Create OAuth 2.0 Client ID
-4. Add authorized redirect URI: `https://your-domain/auth/google/callback`
-
-#### Install Dependencies
+### Quick Deploy
 
 ```bash
-cd srv
-npm install
-```
+# Backend (Workers)
+cd srv && npm run deploy
 
-#### Run Locally
-
-```bash
-cd srv
-npm run dev
-```
-
-#### Deploy via GitHub Actions (Recommended)
-
-Workers are deployed using GitHub Actions. Set up secrets in your repo:
-
-1. Go to GitHub → Repository → Settings → Secrets and variables → Actions
-2. Add these secrets:
-
-| Secret | Value |
-|--------|-------|
-| `CF_ACCOUNT_ID` | Your Cloudflare Account ID (from dashboard URL) |
-| `CF_API_TOKEN` | Cloudflare API Token (create at https://dash.cloudflare.com/profile/api-tokens) |
-
-3. Push to `main` or `staging` branch to trigger deploy
-4. Or manually trigger from GitHub → Actions → Deploy Workers → Run workflow
-
-#### Deploy Locally (Alternative)
-
-```bash
-cd srv
-npm run deploy
-```
-
-Or deploy to specific environment:
-```bash
-npm run deploy:staging  # Deploy to staging
-npm run deploy:prod     # Deploy to production
-```
-
----
-
-### 3. Frontend (Pages)
-
-#### Configure Environment
-
-Copy and configure `app/.env.example`:
-
-```bash
-cp app/.env.example app/.env
-```
-
-Edit `app/.env`:
-```env
-# Production: Workers URL after deployment
-VITE_API_URL=https://your-workers-domain.workers.dev
-```
-
-#### Build & Deploy via GitHub
-
-1. Push to `main` branch (or merge staging to main)
-2. In Cloudflare Dashboard → Pages → regarded
-3. Configure:
-
-| Setting | Value |
-|---------|-------|
-| Production branch | `main` |
-| Build command | `npm run build` |
-| Build output directory | `dist` |
-| Root directory | `app` |
-
-4. Add custom domain (optional)
-
-#### Local Development
-
-```bash
-# Frontend only (needs workers running)
-cd app
-npm run dev
-
-# Or with local workers proxy
-cd app
-VITE_API_URL=http://localhost:8787 npm run dev
-```
-
----
-
-### 4. Environment Variables Summary
-
-| Variable | Where | Description |
-|----------|-------|-------------|
-| `GOOGLE_CLIENT_ID` | Workers (secret) | Google OAuth Client ID |
-| `GOOGLE_CLIENT_SECRET` | Workers (secret) | Google OAuth Client Secret |
-| `JWT_SECRET` | Workers (secret) | Secret for JWT tokens |
-| `VITE_API_URL` | Frontend (.env) | Workers API URL |
-
----
-
-### 5. Database Migrations
-
-After deploying workers, run D2 migrations:
-
-```bash
-cd srv
-npx wrangler d1 migrations apply regarded-db
-```
-
----
-
-### Quick Deploy Commands
-
-```bash
-# Full deploy (both)
-cd srv && npm run deploy                    # Backend
-# Then trigger Pages deploy via GitHub push
-
-# Or from root
-npm run build:frontend                     # Build frontend
-cd srv && npm run deploy                   # Deploy backend
+# Frontend (Pages) - push to main/staging to trigger auto-deploy
 ```
 
 ## Tech Stack
