@@ -111,7 +111,6 @@ cd srv && npm run deploy
 ## For Developers
 
 - [AGENTS.md](./AGENTS.md) - Developer guide and codebase docs
-- [SPECS.md](./SPECS.md) - Detailed technical specification
 - [ROADMAP.md](./ROADMAP.md) - Version history and upcoming features
 - [DEPLOY.md](./DEPLOY.md) - Deployment instructions
 

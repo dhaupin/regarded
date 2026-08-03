@@ -268,7 +268,6 @@ cd srv && npm run deploy                   # Deploy backend
 
 - [README.md](./README.md) - Project overview and quick start
 - [AGENTS.md](./AGENTS.md) - Developer guide and codebase documentation
-- [SPECS.md](./SPECS.md) - Detailed technical specification
 - [ROADMAP.md](./ROADMAP.md) - Version history and upcoming features
 
 ---

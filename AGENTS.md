@@ -447,7 +447,6 @@ VITE_GOOGLE_CLIENT_ID=...
 ## Related Docs
 
 - [README.md](./README.md) - Project overview and quick start
-- [SPECS.md](./SPECS.md) - Detailed technical specification
 - [ROADMAP.md](./ROADMAP.md) - Version history and upcoming features
 - [DEPLOY.md](./DEPLOY.md) - Deployment instructions
 
