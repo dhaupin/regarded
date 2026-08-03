@@ -108,7 +108,13 @@ cd srv && npm run deploy
 - **Database**: D2 (SQLite), KV Namespace
 - **Auth**: Google OAuth 2.0
 
+## For Developers
+
+- [AGENTS.md](./AGENTS.md) - Detailed codebase docs, module architecture, contributing guide
+- [ROADMAP.md](./ROADMAP.md) - Planned features and future integrations
+- [DEPLOY.md](./DEPLOY.md) - Deployment instructions
+
 ## License
 
-MIT
+[MIT](https://github.com/dhaupin/regarded/blob/main/LICENSE)
 

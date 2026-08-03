@@ -2,7 +2,7 @@
 
 ## Overview
 
-A phased approach to building the Regarded crypto trading bot platform. Each phase delivers working, testable functionality while maintaining the KISS/DRY principles.
+A phased approach to building the Regarded crypto trading agent platform. Each phase delivers working, testable functionality while maintaining the KISS/DRY principles.
 
 ---
 
