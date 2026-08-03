@@ -19,22 +19,22 @@
 | Page | Status | Notes |
 |------|--------|-------|
 | Dashboard | ✅ Done | Template example |
+| ConnectorsList | ✅ Done | |
+| PositionsList | ✅ Done | |
+| TradesList | ✅ Done | |
+| StrategiesList | ⬜ | |
+| RulesList | ⬜ | |
 | ConnectorsCreate | ⬜ | |
 | ConnectorsEdit | ⬜ | |
-| ConnectorsList | ⬜ | |
-| PositionsList | ⬜ | |
 | RulesCreate | ⬜ | |
 | RulesEdit | ⬜ | Has Refine |
-| RulesList | ⬜ | |
 | StrategiesCreate | ⬜ | |
 | StrategiesEdit | ⬜ | Has Refine |
-| StrategiesList | ⬜ | |
 | Settings | ⬜ | |
-| TradesList | ⬜ | |
 | Login | ⬜ | May need less work |
 
 ## Completed
 
 - 2026-08-03: Phase 1 - Remove antd dependencies
-- 2026-08-03: Phase 2a - Create Loading, Tabs components
-- 2026-08-03: Dashboard migration complete
+- 2026-08-03: Phase 2a - Create Loading, Tabs, Checkbox components
+- 2026-08-03: Dashboard, ConnectorsList, PositionsList, TradesList migration

@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Loading } from '@/components/ui/loading';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Spin, Select, Checkbox } from 'antd';
-import { PlusOutlined, ThunderboltOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { message } from 'antd';
+import { useToast } from '@/hooks/use-toast';
+import { Plus, Zap, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { apiGet, apiPut, apiDelete } from '@/lib/api';
 
 interface Strategy {
@@ -18,6 +20,7 @@ interface Strategy {
 }
 
 export function StrategiesList() {
+  const { toast } = useToast();
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -55,7 +58,6 @@ export function StrategiesList() {
   }, [strategies, search, statusFilter]);
 
   const allSelected = filteredStrategies.length > 0 && selectedIds.length === filteredStrategies.length;
-  const someSelected = selectedIds.length > 0 && selectedIds.length < filteredStrategies.length;
 
   const handleSelectAll = () => {
     if (allSelected) {
@@ -76,11 +78,11 @@ export function StrategiesList() {
   const handleDelete = async (id: string, _name: string) => {
     try {
       await apiDelete(`/strategies/${id}`);
-      message.success('Strategy deleted');
+      toast({ title: 'Success', description: 'Strategy deleted', variant: 'success' });
       setStrategies(strategies.filter(s => s.id !== id));
       setSelectedIds(prev => prev.filter(i => i !== id));
     } catch {
-      message.error('Failed to delete strategy');
+      toast({ title: 'Error', description: 'Failed to delete strategy', variant: 'destructive' });
     }
   };
 
@@ -98,11 +100,11 @@ export function StrategiesList() {
 
     const successCount = results.filter(r => r).length;
     if (successCount > 0) {
-      message.success(`Deleted ${successCount} strategy(s)`);
+      toast({ title: 'Success', description: `Deleted ${successCount} strategy(s)`, variant: 'success' });
       setStrategies(strategies.filter(s => !selectedIds.includes(s.id)));
       setSelectedIds([]);
     } else {
-      message.error('Failed to delete strategies');
+      toast({ title: 'Error', description: 'Failed to delete strategies', variant: 'destructive' });
     }
   };
 
@@ -120,13 +122,13 @@ export function StrategiesList() {
 
     const successCount = results.filter(r => r).length;
     if (successCount > 0) {
-      message.success(`${enable ? 'Enabled' : 'Disabled'} ${successCount} strategy(s)`);
+      toast({ title: 'Success', description: `${enable ? 'Enabled' : 'Disabled'} ${successCount} strategy(s)`, variant: 'success' });
       setStrategies(strategies.map(s => 
         selectedIds.includes(s.id) ? { ...s, enabled: enable } : s
       ));
       setSelectedIds([]);
     } else {
-      message.error('Failed to update strategies');
+      toast({ title: 'Error', description: 'Failed to update strategies', variant: 'destructive' });
     }
   };
 
@@ -141,7 +143,7 @@ export function StrategiesList() {
         </div>
         <Link to="/strategies/create">
           <Button>
-            <PlusOutlined className="mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             Create Strategy
           </Button>
         </Link>
@@ -155,17 +157,16 @@ export function StrategiesList() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select
-          placeholder="Status"
-          value={statusFilter}
-          onChange={setStatusFilter}
-          style={{ width: 140 }}
-          options={[
-            { value: 'all', label: 'All Status' },
-            { value: 'enabled', label: 'Enabled' },
-            { value: 'disabled', label: 'Disabled' },
-          ]}
-        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="enabled">Enabled</SelectItem>
+            <SelectItem value="disabled">Disabled</SelectItem>
+          </SelectContent>
+        </Select>
         <span className="text-sm text-muted-foreground ml-auto">
           {filteredStrategies.length} of {strategies.length} strategies
         </span>
@@ -176,8 +177,7 @@ export function StrategiesList() {
         <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
           <Checkbox
             checked={allSelected}
-            indeterminate={someSelected}
-            onChange={handleSelectAll}
+            onCheckedChange={handleSelectAll}
           />
           <span className="text-sm">
             {selectedIds.length} selected
@@ -201,7 +201,7 @@ export function StrategiesList() {
             size="sm" 
             onClick={handleBulkDelete}
           >
-            <DeleteOutlined className="mr-2" />
+            <Trash2 className="mr-2 h-4 w-4" />
             Delete Selected
           </Button>
           <Button 
@@ -217,13 +217,13 @@ export function StrategiesList() {
       {loading ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <Spin size="large" />
+            <Loading text="Loading strategies..." />
           </CardContent>
         </Card>
       ) : filteredStrategies.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <ThunderboltOutlined className="h-12 w-12 text-muted-foreground mb-4" />
+            <Zap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
               {search || statusFilter !== 'all' 
                 ? 'No strategies match your filters' 
@@ -268,19 +268,19 @@ export function StrategiesList() {
                 <div className="flex gap-2 mt-4">
                   <Link to={`/strategies/${strategy.id}`}>
                     <Button variant="outline" size="sm">
-                      <EditOutlined />
+                      <Edit className="h-4 w-4" />
                     </Button>
                   </Link>
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button variant="outline" size="sm" className="text-destructive">
-                        <DeleteOutlined />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>
-                          <ExclamationCircleOutlined style={{ marginRight: 8 }} />
+                          <AlertCircle className="inline h-4 w-4 mr-2" />
                           Delete Strategy
                         </DialogTitle>
                         <DialogDescription>
