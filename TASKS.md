@@ -8,7 +8,7 @@
 |-------|-------------|--------|
 | 1 | Remove antd dependencies | ✅ Done |
 | 2a | Create missing shadcn components (Loading, Tabs) | ✅ Done |
-| 2b | Migrate pages off antd | 🔄 In Progress |
+| 2b | Migrate pages off antd | ✅ Done |
 | 3 | Create shared Page component | Pending |
 | 4 | Clean up Refine usage | Pending |
 | 5 | Set up Tailwind theme | Pending |
@@ -27,16 +27,15 @@
 | ConnectorsCreate | ✅ Done | |
 | ConnectorsEdit | ✅ Done | Clean |
 | RulesCreate | ✅ Done | |
+| RulesEdit | ✅ Done | Refine removed |
 | StrategiesCreate | ✅ Done | |
+| StrategiesEdit | ✅ Done | Refine removed |
 | Settings | ✅ Done | Clean |
 | Login | ✅ Done | Clean |
-| DebugPage | ✅ Done | Complex - uses Dialog, Badge, Tabs |
-| RulesEdit | ⬜ | Has Refine - Phase 4 |
-| StrategiesEdit | ⬜ | Has Refine - Phase 4 |
+| DebugPage | ✅ Done | Complex |
 
 ## Completed
 
 - 2026-08-03: Phase 1 - Remove antd dependencies
 - 2026-08-03: Phase 2a - Create Loading, Tabs, Checkbox components
-- 2026-08-03: 11 pages migrated to shadcn/Tailwind
-- Phase 2b complete except Refine pages (Phase 4)
+- 2026-08-03: Phase 2b - ALL 14 pages migrated to shadcn/Tailwind
