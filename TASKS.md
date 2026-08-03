@@ -30,6 +30,7 @@
 | StrategiesCreate | ✅ Done | |
 | Settings | ✅ Done | Clean |
 | Login | ✅ Done | Clean |
+| DebugPage | ✅ Done | Complex - uses Dialog, Badge, Tabs |
 | RulesEdit | ⬜ | Has Refine - Phase 4 |
 | StrategiesEdit | ⬜ | Has Refine - Phase 4 |
 
@@ -37,5 +38,5 @@
 
 - 2026-08-03: Phase 1 - Remove antd dependencies
 - 2026-08-03: Phase 2a - Create Loading, Tabs, Checkbox components
-- 2026-08-03: 10 pages migrated to shadcn/Tailwind
-- Phase 2b complete except Refine pages
+- 2026-08-03: 11 pages migrated to shadcn/Tailwind
+- Phase 2b complete except Refine pages (Phase 4)
