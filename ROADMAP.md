@@ -361,5 +361,35 @@ Phase 0 ──┬──► Phase 1 ──┬──► Phase 2 ──┬──►
 
 ---
 
-*Last Updated: 2026-07-29*
+## Future Integrations
+
+### Vant Integration (Priority: High)
+Vant (https://github.com/dhaupin/vant) is a memory/experience system for AI agents.
+
+**Goals:**
+- Store agent experiences and learnings
+- Session persistence across restarts
+- Strategy performance tracking
+- Guard/Rules configuration versioning
+
+**Implementation Ideas:**
+- Create `lib/vant.ts` adapter
+- Store guard configs in Vant memory
+- Track strategy performance metrics
+- Persist agent state across deployments
+
+---
+
+### Future Considerations
+
+- Python engine for complex analysis
+- Rust engine for HFT
+- Backtesting module
+- Multi-sig wallet support
+- Telegram/Discord notifications
+- Vant memory integration
+
+---
+
+*Last Updated: 2026-08-02*
 *Version: 0.2.0*
