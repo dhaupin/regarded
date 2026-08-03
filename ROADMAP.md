@@ -392,4 +392,4 @@ Vant (https://github.com/dhaupin/vant) is a memory/experience system for AI agen
 ---
 
 *Last Updated: 2026-08-02*
-*Version: 0.2.0*
+*Version: 0.8.6*

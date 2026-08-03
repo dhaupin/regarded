@@ -461,4 +461,4 @@ See [DEPLOY.md](./DEPLOY.md) for detailed deployment instructions.
 ---
 
 *Last Updated: 2026-08-02*
-*Version: 0.2.0*
+*Version: 0.8.6*

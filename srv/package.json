@@ -1,6 +1,6 @@
 {
   "name": "regarded-backend",
-  "version": "0.1.0",
+  "version": "0.8.6",
   "private": true,
   "scripts": {
     "build": "esbuild src/app.ts --bundle --outfile=dist/worker.js --format=esm --platform=neutral --external:*.png --external:*.jpg --external:*.svg",
