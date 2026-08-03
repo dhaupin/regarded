@@ -22,7 +22,7 @@
 | ConnectorsList | ✅ Done | |
 | PositionsList | ✅ Done | |
 | TradesList | ✅ Done | |
-| StrategiesList | ⬜ | |
+| StrategiesList | ✅ Done | |
 | RulesList | ⬜ | |
 | ConnectorsCreate | ⬜ | |
 | ConnectorsEdit | ⬜ | |
@@ -37,4 +37,4 @@
 
 - 2026-08-03: Phase 1 - Remove antd dependencies
 - 2026-08-03: Phase 2a - Create Loading, Tabs, Checkbox components
-- 2026-08-03: Dashboard, ConnectorsList, PositionsList, TradesList migration
+- 2026-08-03: Dashboard, ConnectorsList, PositionsList, TradesList, StrategiesList migration

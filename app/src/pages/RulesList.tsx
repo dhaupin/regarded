@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Loading } from '@/components/ui/loading';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Spin, Select, Checkbox } from 'antd';
-import { PlusOutlined, FileProtectOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { message } from 'antd';
+import { useToast } from '@/hooks/use-toast';
+import { Plus, Shield, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { apiGet, apiPut, apiDelete } from '@/lib/api';
 
 interface Rule {
@@ -19,6 +21,7 @@ interface Rule {
 }
 
 export function RulesList() {
+  const { toast } = useToast();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -56,7 +59,6 @@ export function RulesList() {
   }, [rules, search, statusFilter]);
 
   const allSelected = filteredRules.length > 0 && selectedIds.length === filteredRules.length;
-  const someSelected = selectedIds.length > 0 && selectedIds.length < filteredRules.length;
 
   const handleSelectAll = () => {
     if (allSelected) {
@@ -77,11 +79,11 @@ export function RulesList() {
   const handleDelete = async (id: string, _name: string) => {
     try {
       await apiDelete(`/rules/${id}`);
-      message.success('Rule deleted');
+      toast({ title: 'Success', description: 'Rule deleted', variant: 'success' });
       setRules(rules.filter(r => r.id !== id));
       setSelectedIds(prev => prev.filter(i => i !== id));
     } catch {
-      message.error('Failed to delete rule');
+      toast({ title: 'Error', description: 'Failed to delete rule', variant: 'destructive' });
     }
   };
 
@@ -99,11 +101,11 @@ export function RulesList() {
 
     const successCount = results.filter(r => r).length;
     if (successCount > 0) {
-      message.success(`Deleted ${successCount} rule(s)`);
+      toast({ title: 'Success', description: `Deleted ${successCount} rule(s)`, variant: 'success' });
       setRules(rules.filter(r => !selectedIds.includes(r.id)));
       setSelectedIds([]);
     } else {
-      message.error('Failed to delete rules');
+      toast({ title: 'Error', description: 'Failed to delete rules', variant: 'destructive' });
     }
   };
 
@@ -121,13 +123,13 @@ export function RulesList() {
 
     const successCount = results.filter(r => r).length;
     if (successCount > 0) {
-      message.success(`${enable ? 'Enabled' : 'Disabled'} ${successCount} rule(s)`);
+      toast({ title: 'Success', description: `${enable ? 'Enabled' : 'Disabled'} ${successCount} rule(s)`, variant: 'success' });
       setRules(rules.map(r => 
         selectedIds.includes(r.id) ? { ...r, enabled: enable } : r
       ));
       setSelectedIds([]);
     } else {
-      message.error('Failed to update rules');
+      toast({ title: 'Error', description: 'Failed to update rules', variant: 'destructive' });
     }
   };
 
@@ -142,7 +144,7 @@ export function RulesList() {
         </div>
         <Link to="/rules/create">
           <Button>
-            <PlusOutlined className="mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             Create Rule
           </Button>
         </Link>
@@ -156,17 +158,16 @@ export function RulesList() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select
-          placeholder="Status"
-          value={statusFilter}
-          onChange={setStatusFilter}
-          style={{ width: 140 }}
-          options={[
-            { value: 'all', label: 'All Status' },
-            { value: 'enabled', label: 'Enabled' },
-            { value: 'disabled', label: 'Disabled' },
-          ]}
-        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="enabled">Enabled</SelectItem>
+            <SelectItem value="disabled">Disabled</SelectItem>
+          </SelectContent>
+        </Select>
         <span className="text-sm text-muted-foreground ml-auto">
           {filteredRules.length} of {rules.length} rules
         </span>
@@ -177,8 +178,7 @@ export function RulesList() {
         <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
           <Checkbox
             checked={allSelected}
-            indeterminate={someSelected}
-            onChange={handleSelectAll}
+            onCheckedChange={handleSelectAll}
           />
           <span className="text-sm">
             {selectedIds.length} selected
@@ -202,7 +202,7 @@ export function RulesList() {
             size="sm" 
             onClick={handleBulkDelete}
           >
-            <DeleteOutlined className="mr-2" />
+            <Trash2 className="mr-2 h-4 w-4" />
             Delete Selected
           </Button>
           <Button 
@@ -218,13 +218,13 @@ export function RulesList() {
       {loading ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <Spin size="large" />
+            <Loading text="Loading rules..." />
           </CardContent>
         </Card>
       ) : filteredRules.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <FileProtectOutlined className="h-12 w-12 text-muted-foreground mb-4" />
+            <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
               {search || statusFilter !== 'all' 
                 ? 'No rules match your filters' 
@@ -269,19 +269,19 @@ export function RulesList() {
                 <div className="flex gap-2 mt-4">
                   <Link to={`/rules/${rule.id}`}>
                     <Button variant="outline" size="sm">
-                      <EditOutlined />
+                      <Edit className="h-4 w-4" />
                     </Button>
                   </Link>
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button variant="outline" size="sm" className="text-destructive">
-                        <DeleteOutlined />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>
-                          <ExclamationCircleOutlined style={{ marginRight: 8 }} />
+                          <AlertCircle className="inline h-4 w-4 mr-2" />
                           Delete Rule
                         </DialogTitle>
                         <DialogDescription>
