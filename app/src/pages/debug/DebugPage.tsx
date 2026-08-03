@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button as AntButton } from 'antd';
-import { Spin, Select, Tabs, Empty, Tag, Modal, Switch } from 'antd';
+import { Button } from '@/components/ui/button';
+import { Loading } from '@/components/ui/loading';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { 
-  ApiOutlined, 
-  HistoryOutlined, 
-  BugOutlined, 
-  ClearOutlined, 
-  DownloadOutlined,
-  CopyOutlined,
-} from '@ant-design/icons';
+  Api, 
+  History, 
+  Bug, 
+  Trash2, 
+  Download, 
+  Copy,
+} from 'lucide-react';
 
 interface LogEntry {
   id: string;
@@ -180,23 +186,35 @@ export function DebugPage() {
     return matchesLevel && matchesCategory;
   });
 
-  const getLevelColor = (level: string) => {
+  const getLevelVariant = (level: string): 'destructive' | 'outline' | 'secondary' | 'default' => {
     switch (level) {
-      case 'error': return 'red';
-      case 'warn': return 'orange';
-      case 'debug': return 'blue';
-      default: return 'green';
+      case 'error': return 'destructive';
+      case 'warn': return 'outline';
+      case 'debug': return 'secondary';
+      default: return 'default';
     }
   };
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'trade': return 'green';
-      case 'rule': return 'purple';
-      case 'agent': return 'cyan';
-      case 'api': return 'blue';
-      default: return 'default';
+  const getCategoryVariant = (level: string): 'destructive' | 'outline' | 'secondary' | 'default' => {
+    switch (level) {
+      case 'trade': return 'default';
+      case 'rule': return 'outline';
+      case 'agent': return 'secondary';
+      case 'api': return 'secondary';
+      default: return 'outline';
     }
+  };
+
+  const getMethodVariant = (method: string): 'default' | 'destructive' | 'outline' | 'secondary' => {
+    switch (method) {
+      case 'GET': return 'default';
+      case 'POST': return 'secondary';
+      default: return 'outline';
+    }
+  };
+
+  const getStatusVariant = (status: number): 'default' | 'destructive' => {
+    return status < 400 ? 'default' : 'destructive';
   };
 
   const copyToClipboard = (text: string) => {
@@ -218,7 +236,7 @@ export function DebugPage() {
       key: 'logs',
       label: (
         <span>
-          <HistoryOutlined /> Agent Logs
+          <History className="mr-2 h-4 w-4" /> Agent Logs
         </span>
       ),
       children: (
@@ -252,12 +270,14 @@ export function DebugPage() {
                 { value: 'system', label: 'System' },
               ]}
             />
-            <AntButton icon={<ClearOutlined />} onClick={() => setLogs([])}>
+            <Button variant="outline" size="sm" onClick={() => setLogs([])}>
+              <Trash2 className="mr-2 h-4 w-4" />
               Clear
-            </AntButton>
-            <AntButton icon={<DownloadOutlined />} onClick={exportLogs}>
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportLogs}>
+              <Download className="mr-2 h-4 w-4" />
               Export
-            </AntButton>
+            </Button>
             <span className="ml-auto text-sm text-muted-foreground">
               {filteredLogs.length} entries
             </span>
@@ -266,10 +286,10 @@ export function DebugPage() {
           {/* Logs List */}
           {loading ? (
             <div className="py-10 text-center">
-              <Spin size="large" />
+              <Loading />
             </div>
           ) : filteredLogs.length === 0 ? (
-            <Empty description="No logs available" />
+            <div className="py-10 text-center text-muted-foreground">No logs available</div>
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
               {filteredLogs.map((log) => (
@@ -283,18 +303,19 @@ export function DebugPage() {
                       <span className="text-xs text-muted-foreground">
                         {new Date(log.timestamp).toLocaleTimeString()}
                       </span>
-                      <Tag color={getLevelColor(log.level)}>{log.level.toUpperCase()}</Tag>
-                      <Tag color={getCategoryColor(log.category)}>{log.category}</Tag>
+                      <Badge variant={getLevelVariant(log.level)}>{log.level.toUpperCase()}</Badge>
+                      <Badge variant={getCategoryVariant(log.category)}>{log.category}</Badge>
                       <span className="flex-1 truncate">{log.message}</span>
-                      <AntButton 
-                        type="text" 
-                        size="small" 
-                        icon={<CopyOutlined />}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
                         onClick={(e) => {
                           e.stopPropagation();
                           copyToClipboard(JSON.stringify(log, null, 2));
                         }}
-                      />
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -308,13 +329,13 @@ export function DebugPage() {
       key: 'api',
       label: (
         <span>
-          <ApiOutlined /> API Logs
+          <Api className="mr-2 h-4 w-4" /> API Logs
         </span>
       ),
       children: (
         <div className="space-y-4">
           {apiLogs.length === 0 ? (
-            <Empty description="No API logs available" />
+            <div className="py-10 text-center text-muted-foreground">No API logs available</div>
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
               {apiLogs.map((log) => (
@@ -324,13 +345,13 @@ export function DebugPage() {
                       <span className="text-xs text-muted-foreground">
                         {new Date(log.timestamp).toLocaleTimeString()}
                       </span>
-                      <Tag color={log.method === 'GET' ? 'green' : log.method === 'POST' ? 'blue' : 'orange'}>
+                      <Badge variant={getMethodVariant(log.method)}>
                         {log.method}
-                      </Tag>
+                      </Badge>
                       <span className="flex-1 font-mono text-sm">{log.path}</span>
-                      <Tag color={log.status < 400 ? 'green' : 'red'}>
+                      <Badge variant={getStatusVariant(log.status)}>
                         {log.status}
-                      </Tag>
+                      </Badge>
                       <span className="text-xs text-muted-foreground">{log.duration}ms</span>
                     </div>
                   </CardContent>
@@ -345,11 +366,11 @@ export function DebugPage() {
       key: 'trades',
       label: (
         <span>
-          <BugOutlined /> Trade History
+          <Bug className="mr-2 h-4 w-4" /> Trade History
         </span>
       ),
       children: (
-        <Empty description="Trade history will appear here when available" />
+        <div className="py-10 text-center text-muted-foreground">Trade history will appear here when available</div>
       ),
     },
   ];
@@ -378,36 +399,27 @@ export function DebugPage() {
         items={tabItems}
       />
 
-      {/* Log Detail Modal */}
-      <Modal
-        title="Log Details"
-        open={!!selectedLog}
-        onCancel={() => setSelectedLog(null)}
-        footer={[
-          <AntButton key="copy" icon={<CopyOutlined />} onClick={() => selectedLog && copyToClipboard(JSON.stringify(selectedLog, null, 2))}>
-            Copy JSON
-          </AntButton>,
-          <AntButton key="close" type="primary" onClick={() => setSelectedLog(null)}>
-            Close
-          </AntButton>,
-        ]}
-        width={700}
-      >
-        {selectedLog && (
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Tag color={getLevelColor(selectedLog.level)}>
-                {selectedLog.level.toUpperCase()}
-              </Tag>
-              <Tag color={getCategoryColor(selectedLog.category)}>
-                {selectedLog.category}
-              </Tag>
-              <span className="text-muted-foreground">
-                {new Date(selectedLog.timestamp).toLocaleString()}
-              </span>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-2">Message</h4>
+      {/* Log Detail Dialog */}
+      <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Log Details</DialogTitle>
+          </DialogHeader>
+          {selectedLog && (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Badge variant={getLevelVariant(selectedLog.level)}>
+                  {selectedLog.level.toUpperCase()}
+                </Badge>
+                <Badge variant={getCategoryVariant(selectedLog.category)}>
+                  {selectedLog.category}
+                </Badge>
+                <span className="text-muted-foreground">
+                  {new Date(selectedLog.timestamp).toLocaleString()}
+                </span>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">Message</h4>
               <p>{selectedLog.message}</p>
             </div>
             {selectedLog.details && (
@@ -419,8 +431,16 @@ export function DebugPage() {
               </div>
             )}
           </div>
-        )}
-      </Modal>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => selectedLog && copyToClipboard(JSON.stringify(selectedLog, null, 2))}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copy JSON
+            </Button>
+            <Button onClick={() => setSelectedLog(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
