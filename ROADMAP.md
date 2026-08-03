@@ -128,17 +128,33 @@ Core engine complete.
 
 ### Gaps & TODO
 
-| Gap | Priority |
-|-----|----------|
-| Webhook API | High |
-| Runner persistence (KV) | Medium |
-| Live trading connectors | Medium |
+| Gap | Priority | Status |
+|-----|----------|--------|
+| Webhook API - integrate with rules engine | High | ⚠️ Partially complete |
+| Runner persistence - connect to KV | Medium | ⚠️ Partially complete |
+| Live trading connectors | Medium | Not started |
+| Frontend theming consistency | High | Not started |
 
 ### Next Steps
 
-1. Webhook support - Add webhook endpoint for external signals
-2. Runner persistence - Connect TradingAgent to KV for state persistence
-3. Live trading - Implement real trading in connectors
+1. **Webhook API** (High) - Partially complete
+   - ✅ Built: TradingView + generic signal webhooks (srv/src/routes/webhooks.ts)
+   - ✅ Built: Outbound webhook config CRUD
+   - ❌ Needed: Integrate signals with rules engine to trigger trades
+
+2. **Runner Persistence** (Medium) - Partially complete
+   - ✅ Built: Storage interface + KV factory (lib/storage.ts)
+   - ✅ Built: Runner.save()/load() methods
+   - ✅ Built: Portfolio, Guard, Scheduler, Psy all have save/load
+   - ❌ Needed: Actually call save() on schedule, connect runner to KV in Workers
+
+3. **Frontend Consistency** (High)
+   - Mixed: shadcn-style components (components/ui/) + antd throughout
+   - Need: Pick one UI library, create consistent Page wrapper
+
+4. **Live Trading** (Medium)
+   - All connectors in paper mode currently
+   - Need: Real trading implementation
 
 ---
 
