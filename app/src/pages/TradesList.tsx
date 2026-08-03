@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Spin, Select, Pagination } from 'antd';
-import { SwapOutlined } from '@ant-design/icons';
+import { Loading } from '@/components/ui/loading';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeftRight } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 
 interface Trade {
@@ -85,28 +87,26 @@ export function TradesList() {
           className="max-w-xs"
           
         />
-        <Select
-          placeholder="Side"
-          value={sideFilter}
-          onChange={setSideFilter}
-          style={{ width: 120 }}
-          options={[
-            { value: 'all', label: 'All Sides' },
-            { value: 'buy', label: 'Buy' },
-            { value: 'sell', label: 'Sell' },
-          ]}
-        />
-        <Select
-          placeholder="Status"
-          value={statusFilter}
-          onChange={setStatusFilter}
-          style={{ width: 120 }}
-          options={[
-            { value: 'all', label: 'All Status' },
-            { value: 'open', label: 'Open' },
-            { value: 'closed', label: 'Closed' },
-          ]}
-        />
+        <Select value={sideFilter} onValueChange={setSideFilter}>
+          <SelectTrigger className="w-[120px]">
+            <SelectValue placeholder="Side" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sides</SelectItem>
+            <SelectItem value="buy">Buy</SelectItem>
+            <SelectItem value="sell">Sell</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[120px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="open">Open</SelectItem>
+            <SelectItem value="closed">Closed</SelectItem>
+          </SelectContent>
+        </Select>
         <span className="text-sm text-muted-foreground ml-auto">
           {filteredTrades.length} of {total} trades
         </span>
@@ -115,13 +115,13 @@ export function TradesList() {
       {loading && trades.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <Spin size="large" />
+            <Loading text="Loading trades..." />
           </CardContent>
         </Card>
       ) : filteredTrades.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <SwapOutlined className="h-12 w-12 text-muted-foreground mb-4" />
+            <ArrowLeftRight className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
               {search || sideFilter !== 'all' || statusFilter !== 'all' 
                 ? 'No trades match your filters' 
@@ -183,14 +183,26 @@ export function TradesList() {
             </CardContent>
           </Card>
           
-          <div className="flex justify-center">
-            <Pagination
-              current={page}
-              pageSize={pageSize}
-              total={total}
-              onChange={setPage}
-              showSizeChanger={false}
-            />
+          <div className="flex justify-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              Previous
+            </Button>
+            <span className="flex items-center text-sm text-muted-foreground">
+              Page {page} of {Math.ceil(total / pageSize)}
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setPage(p => p + 1)}
+              disabled={page * pageSize >= total}
+            >
+              Next
+            </Button>
           </div>
         </>
       )}

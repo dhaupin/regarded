@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Table as AntTable, Spin, Select } from 'antd';
-import { WalletOutlined } from '@ant-design/icons';
+import { Loading } from '@/components/ui/loading';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Wallet } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 
 interface Position {
@@ -51,70 +53,6 @@ export function PositionsList() {
     });
   }, [positions, search, sideFilter]);
 
-  const columns = [
-    {
-      title: 'Symbol',
-      dataIndex: 'symbol',
-      key: 'symbol',
-      sorter: (a: Position, b: Position) => a.symbol.localeCompare(b.symbol),
-    },
-    {
-      title: 'Side',
-      dataIndex: 'side',
-      key: 'side',
-      render: (side: string) => (
-        <Badge variant={side === 'long' ? 'success' : 'destructive'}>
-          {side.toUpperCase()}
-        </Badge>
-      ),
-    },
-    {
-      title: 'Size',
-      dataIndex: 'size',
-      key: 'size',
-      sorter: (a: Position, b: Position) => a.size - b.size,
-      render: (size: number) => size.toFixed(4),
-    },
-    {
-      title: 'Entry Price',
-      dataIndex: 'entry_price',
-      key: 'entry_price',
-      sorter: (a: Position, b: Position) => a.entry_price - b.entry_price,
-      render: (price: number) => `$${price.toFixed(2)}`,
-    },
-    {
-      title: 'Current Price',
-      dataIndex: 'current_price',
-      key: 'current_price',
-      render: (price: number) => `$${price.toFixed(2)}`,
-    },
-    {
-      title: 'P&L',
-      dataIndex: 'pnl',
-      key: 'pnl',
-      sorter: (a: Position, b: Position) => a.pnl - b.pnl,
-      render: (pnl: number, record: Position) => (
-        <span className={pnl >= 0 ? 'text-green-600' : 'text-red-600'}>
-          ${pnl.toFixed(2)} ({record.pnl_percent.toFixed(2)}%)
-        </span>
-      ),
-    },
-    {
-      title: 'Leverage',
-      dataIndex: 'leverage',
-      key: 'leverage',
-      sorter: (a: Position, b: Position) => a.leverage - b.leverage,
-      render: (leverage: number) => `${leverage}x`,
-    },
-    {
-      title: 'Opened',
-      dataIndex: 'opened_at',
-      key: 'opened_at',
-      sorter: (a: Position, b: Position) => new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime(),
-      render: (date: string) => new Date(date).toLocaleString(),
-    },
-  ];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -135,17 +73,16 @@ export function PositionsList() {
           className="max-w-xs"
           
         />
-        <Select
-          placeholder="Side"
-          value={sideFilter}
-          onChange={setSideFilter}
-          style={{ width: 120 }}
-          options={[
-            { value: 'all', label: 'All Sides' },
-            { value: 'long', label: 'Long' },
-            { value: 'short', label: 'Short' },
-          ]}
-        />
+        <Select value={sideFilter} onValueChange={setSideFilter}>
+          <SelectTrigger className="w-[120px]">
+            <SelectValue placeholder="Side" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sides</SelectItem>
+            <SelectItem value="long">Long</SelectItem>
+            <SelectItem value="short">Short</SelectItem>
+          </SelectContent>
+        </Select>
         <span className="text-sm text-muted-foreground ml-auto">
           {filteredPositions.length} of {positions.length} positions
         </span>
@@ -154,13 +91,13 @@ export function PositionsList() {
       {loading ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <Spin size="large" />
+            <Loading text="Loading positions..." />
           </CardContent>
         </Card>
       ) : filteredPositions.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <WalletOutlined className="h-12 w-12 text-muted-foreground mb-4" />
+            <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
               {search || sideFilter !== 'all' 
                 ? 'No positions match your filters' 
@@ -177,13 +114,40 @@ export function PositionsList() {
             <CardTitle>Open Positions ({filteredPositions.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <AntTable
-              dataSource={filteredPositions}
-              columns={columns}
-              rowKey="id"
-              pagination={{ pageSize: 10 }}
-              size="middle"
-            />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Symbol</TableHead>
+                  <TableHead>Side</TableHead>
+                  <TableHead className="text-right">Size</TableHead>
+                  <TableHead className="text-right">Entry Price</TableHead>
+                  <TableHead className="text-right">Current Price</TableHead>
+                  <TableHead className="text-right">P&L</TableHead>
+                  <TableHead className="text-right">Leverage</TableHead>
+                  <TableHead>Opened</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPositions.map((position) => (
+                  <TableRow key={position.id}>
+                    <TableCell className="font-medium">{position.symbol}</TableCell>
+                    <TableCell>
+                      <Badge variant={position.side === 'long' ? 'success' : 'destructive'}>
+                        {position.side.toUpperCase()}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{position.size.toFixed(4)}</TableCell>
+                    <TableCell className="text-right">${position.entry_price.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">${position.current_price.toFixed(2)}</TableCell>
+                    <TableCell className={`text-right ${position.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ${position.pnl.toFixed(2)} ({position.pnl_percent.toFixed(2)}%)
+                    </TableCell>
+                    <TableCell className="text-right">{position.leverage}x</TableCell>
+                    <TableCell>{new Date(position.opened_at).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

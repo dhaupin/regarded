@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Loading } from '@/components/ui/loading';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Spin, Select, Checkbox } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { message } from 'antd';
+import { useToast } from '@/hooks/use-toast';
+import { Plus, Edit, Trash2, Key, AlertCircle } from 'lucide-react';
 import { apiGet, apiDelete } from '@/lib/api';
 
 interface Connector {
@@ -18,6 +20,7 @@ interface Connector {
 }
 
 export function ConnectorsList() {
+  const { toast } = useToast();
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -58,7 +61,6 @@ export function ConnectorsList() {
   }, [connectors, search, statusFilter, modeFilter]);
 
   const allSelected = filteredConnectors.length > 0 && selectedIds.length === filteredConnectors.length;
-  const someSelected = selectedIds.length > 0 && selectedIds.length < filteredConnectors.length;
 
   const handleSelectAll = () => {
     if (allSelected) {
@@ -79,11 +81,11 @@ export function ConnectorsList() {
   const handleDelete = async (id: string) => {
     try {
       await apiDelete(`/connectors/${id}`);
-      message.success('Connector deleted');
+      toast({ title: 'Success', description: 'Connector deleted', variant: 'success' });
       setConnectors(connectors.filter(c => c.id !== id));
       setSelectedIds(prev => prev.filter(i => i !== id));
     } catch (error) {
-      message.error('Failed to delete connector');
+      toast({ title: 'Error', description: 'Failed to delete connector', variant: 'destructive' });
     }
   };
 
@@ -101,11 +103,11 @@ export function ConnectorsList() {
 
     const successCount = results.filter(r => r).length;
     if (successCount > 0) {
-      message.success(`Deleted ${successCount} connector(s)`);
+      toast({ title: 'Success', description: `Deleted ${successCount} connector(s)`, variant: 'success' });
       setConnectors(connectors.filter(c => !selectedIds.includes(c.id)));
       setSelectedIds([]);
     } else {
-      message.error('Failed to delete connectors');
+      toast({ title: 'Error', description: 'Failed to delete connectors', variant: 'destructive' });
     }
   };
 
@@ -120,7 +122,7 @@ export function ConnectorsList() {
         </div>
         <Link to="/connectors/create">
           <Button>
-            <PlusOutlined className="mr-2" />
+            <Plus className="mr-2 h-4 w-4" />
             Add Connector
           </Button>
         </Link>
@@ -134,28 +136,26 @@ export function ConnectorsList() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select
-          placeholder="Status"
-          value={statusFilter}
-          onChange={setStatusFilter}
-          style={{ width: 140 }}
-          options={[
-            { value: 'all', label: 'All Status' },
-            { value: 'connected', label: 'Connected' },
-            { value: 'disconnected', label: 'Disconnected' },
-          ]}
-        />
-        <Select
-          placeholder="Mode"
-          value={modeFilter}
-          onChange={setModeFilter}
-          style={{ width: 140 }}
-          options={[
-            { value: 'all', label: 'All Modes' },
-            { value: 'paper', label: 'Paper Trading' },
-            { value: 'live', label: 'Live Trading' },
-          ]}
-        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="connected">Connected</SelectItem>
+            <SelectItem value="disconnected">Disconnected</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={modeFilter} onValueChange={setModeFilter}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Mode" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Modes</SelectItem>
+            <SelectItem value="paper">Paper Trading</SelectItem>
+            <SelectItem value="live">Live Trading</SelectItem>
+          </SelectContent>
+        </Select>
         <span className="text-sm text-muted-foreground ml-auto">
           {filteredConnectors.length} of {connectors.length} connectors
         </span>
@@ -166,8 +166,7 @@ export function ConnectorsList() {
         <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
           <Checkbox
             checked={allSelected}
-            indeterminate={someSelected}
-            onChange={handleSelectAll}
+            onCheckedChange={handleSelectAll}
           />
           <span className="text-sm">
             {selectedIds.length} selected
@@ -177,7 +176,7 @@ export function ConnectorsList() {
             size="sm" 
             onClick={handleBulkDelete}
           >
-            <DeleteOutlined className="mr-2" />
+            <Trash2 className="mr-2 h-4 w-4" />
             Delete Selected
           </Button>
           <Button 
@@ -193,13 +192,13 @@ export function ConnectorsList() {
       {loading ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <Spin size="large" />
+            <Loading text="Loading connectors..." />
           </CardContent>
         </Card>
       ) : filteredConnectors.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <ApiOutlined className="h-12 w-12 text-muted-foreground mb-4" />
+            <Key className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
               {search || statusFilter !== 'all' || modeFilter !== 'all' 
                 ? 'No connectors match your filters' 
@@ -222,7 +221,7 @@ export function ConnectorsList() {
                 <div className="flex items-center gap-2">
                   <Checkbox
                     checked={selectedIds.includes(connector.id)}
-                    onChange={() => handleSelectOne(connector.id)}
+                    onCheckedChange={() => handleSelectOne(connector.id)}
                   />
                   <CardTitle className="text-lg">{connector.exchange}</CardTitle>
                 </div>
@@ -242,19 +241,19 @@ export function ConnectorsList() {
                 <div className="flex gap-2 mt-4">
                   <Link to={`/connectors/${connector.id}`}>
                     <Button variant="outline" size="sm">
-                      <EditOutlined />
+                      <Edit className="h-4 w-4" />
                     </Button>
                   </Link>
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button variant="outline" size="sm" className="text-destructive">
-                        <DeleteOutlined />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>
-                          <ExclamationCircleOutlined style={{ marginRight: 8 }} />
+                          <AlertCircle className="inline h-4 w-4 mr-2" />
                           Delete Connector
                         </DialogTitle>
                         <DialogDescription>
