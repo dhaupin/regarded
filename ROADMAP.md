@@ -49,6 +49,21 @@ Core engine complete.
 - HTTP client with retry
 - Cron scheduler
 
+**Backend (srv):**
+- Auth (JWT, OAuth, sessions, lockout)
+- Security hardening (input validation, error handling)
+- QoS managers & circuit breakers
+
+**Frontend (app):**
+- Vite + React setup
+- Routing & layout components
+- Pages structure (Dashboard, Strategies, Trades, Wallets, Settings)
+
+**Security Patterns:**
+- Row-Level Security (RLS) in D2 queries
+- User isolation for all data access
+- Encrypted secrets with per-user keys
+
 ---
 
 ### v0.9.x
