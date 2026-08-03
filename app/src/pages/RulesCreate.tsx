@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Button, Select } from 'antd';
-import { message } from 'antd';
-import { ArrowLeftOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, Plus, CheckCircle, XCircle } from 'lucide-react';
 import { apiPost } from '@/lib/api';
 
 interface FormErrors {
@@ -16,6 +17,7 @@ interface FormErrors {
 
 export function RulesCreate() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<{valid: boolean; message: string; details?: string[]} | null>(null);
@@ -52,7 +54,7 @@ export function RulesCreate() {
 
   const handleValidate = async () => {
     if (!validateLocal()) {
-      message.error('Please fix the errors above');
+      toast({ title: 'Error', description: 'Please fix the errors above', variant: 'destructive' });
       return;
     }
 
@@ -70,15 +72,15 @@ export function RulesCreate() {
       
       if (data.success) {
         setValidationResult({ valid: true, message: data.data?.message || 'Valid' });
-        message.success('Rule validation passed');
+        toast({ title: 'Success', description: 'Rule validation passed', variant: 'success' });
       } else {
         const details = (data.error?.details || []) as string[];
         setValidationResult({ valid: false, message: data.error?.message || 'Validation failed', details });
-        message.error(data.error?.message || 'Validation failed');
+        toast({ title: 'Error', description: data.error?.message || 'Validation failed', variant: 'destructive' });
       }
     } catch (error) {
       setValidationResult({ valid: false, message: 'Validation failed' });
-      message.error('Validation failed');
+      toast({ title: 'Error', description: 'Validation failed', variant: 'destructive' });
     } finally {
       setValidating(false);
     }
@@ -88,7 +90,7 @@ export function RulesCreate() {
     e.preventDefault();
     
     if (!validateLocal()) {
-      message.error('Please fix the errors above');
+      toast({ title: 'Error', description: 'Please fix the errors above', variant: 'destructive' });
       return;
     }
     
@@ -105,13 +107,13 @@ export function RulesCreate() {
       });
       
       if (data.success) {
-        message.success('Rule created successfully');
+        toast({ title: 'Success', description: 'Rule created successfully', variant: 'success' });
         navigate('/rules');
       } else {
-        message.error(data.error?.message || 'Failed to create rule');
+        toast({ title: 'Error', description: data.error?.message || 'Failed to create rule', variant: 'destructive' });
       }
     } catch (error) {
-      message.error('Failed to create rule');
+      toast({ title: 'Error', description: 'Failed to create rule', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -128,10 +130,11 @@ export function RulesCreate() {
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-4">
         <Button 
-          type="text" 
-          icon={<ArrowLeftOutlined />} 
+          variant="ghost" 
+          size="sm"
           onClick={() => navigate('/rules')}
         >
+          <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
         <div>
@@ -271,9 +274,9 @@ export function RulesCreate() {
               <div className={`p-3 rounded-lg ${validationResult.valid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                 <div className="flex items-center gap-2">
                   {validationResult.valid ? (
-                    <CheckCircleOutlined className="text-green-600" />
+                    <CheckCircle className="text-green-600 h-5 w-5" />
                   ) : (
-                    <CloseCircleOutlined className="text-red-600" />
+                    <XCircle className="text-red-600 h-5 w-5" />
                   )}
                   <span className={validationResult.valid ? 'text-green-700' : 'text-red-700'}>
                     {validationResult.message}
@@ -290,14 +293,15 @@ export function RulesCreate() {
             )}
 
             <div className="flex gap-2 pt-4">
-              <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={loading}>
-                Create Rule
+              <Button type="submit" disabled={loading}>
+                <Plus className="mr-2 h-4 w-4" />
+                {loading ? 'Creating...' : 'Create Rule'}
               </Button>
-              <Button type="default" onClick={handleValidate} loading={validating}>
-                <CheckCircleOutlined className="mr-2" />
-                Validate
+              <Button type="button" onClick={handleValidate} disabled={validating}>
+                <CheckCircle className="mr-2 h-4 w-4" />
+                {validating ? 'Validating...' : 'Validate'}
               </Button>
-              <Button variant="outlined" onClick={() => navigate('/rules')}>
+              <Button variant="outline" onClick={() => navigate('/rules')}>
                 Cancel
               </Button>
             </div>

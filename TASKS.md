@@ -24,7 +24,7 @@
 | TradesList | ✅ Done | |
 | StrategiesList | ✅ Done | |
 | RulesList | ✅ Done | |
-| ConnectorsCreate | ⬜ | |
+| ConnectorsCreate | ✅ Done | |
 | ConnectorsEdit | ⬜ | |
 | RulesCreate | ⬜ | |
 | RulesEdit | ⬜ | Has Refine |
@@ -37,4 +37,4 @@
 
 - 2026-08-03: Phase 1 - Remove antd dependencies
 - 2026-08-03: Phase 2a - Create Loading, Tabs, Checkbox components
-- 2026-08-03: 6 list pages migrated (Dashboard, Connectors, Positions, Trades, Strategies, Rules)
+- 2026-08-03: 7 pages migrated
