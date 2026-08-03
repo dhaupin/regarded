@@ -261,3 +261,16 @@ cd srv && npm run deploy                    # Backend
 npm run build:frontend                     # Build frontend
 cd srv && npm run deploy                   # Deploy backend
 ```
+
+---
+
+## Related Docs
+
+- [README.md](./README.md) - Project overview and quick start
+- [AGENTS.md](./AGENTS.md) - Developer guide and codebase documentation
+- [SPECS.md](./SPECS.md) - Detailed technical specification
+- [ROADMAP.md](./ROADMAP.md) - Version history and upcoming features
+
+---
+
+[View on GitHub](https://github.com/dhaupin/regarded)

@@ -142,5 +142,16 @@ Vant (https://github.com/dhaupin/vant) is a memory/experience system for AI agen
 
 ---
 
+## Related Docs
+
+- [README.md](./README.md) - Project overview and quick start
+- [AGENTS.md](./AGENTS.md) - Developer guide and codebase documentation
+- [SPECS.md](./SPECS.md) - Detailed technical specification
+- [DEPLOY.md](./DEPLOY.md) - Deployment instructions
+
+---
+
 *Last Updated: 2026-08-02*
 *Version: 0.8.6*
+
+[View on GitHub](https://github.com/dhaupin/regarded)

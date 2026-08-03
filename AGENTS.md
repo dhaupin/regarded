@@ -444,9 +444,12 @@ VITE_GOOGLE_CLIENT_ID=...
 
 ---
 
-## Deployment
+## Related Docs
 
-See [DEPLOY.md](./DEPLOY.md) for detailed deployment instructions.
+- [README.md](./README.md) - Project overview and quick start
+- [SPECS.md](./SPECS.md) - Detailed technical specification
+- [ROADMAP.md](./ROADMAP.md) - Version history and upcoming features
+- [DEPLOY.md](./DEPLOY.md) - Deployment instructions
 
 ---
 
@@ -462,3 +465,5 @@ See [DEPLOY.md](./DEPLOY.md) for detailed deployment instructions.
 
 *Last Updated: 2026-08-02*
 *Version: 0.8.6*
+
+[View on GitHub](https://github.com/dhaupin/regarded)

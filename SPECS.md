@@ -1298,5 +1298,16 @@ frontend/
 
 ---
 
-*Last Updated: 2026-07-29*
-*Version: 0.1.0 (Planning)*
+## Related Docs
+
+- [README.md](../README.md) - Project overview and quick start
+- [AGENTS.md](../AGENTS.md) - Developer guide and codebase documentation
+- [ROADMAP.md](../ROADMAP.md) - Version history and upcoming features
+- [DEPLOY.md](../DEPLOY.md) - Deployment instructions
+
+---
+
+*Last Updated: 2026-08-02*
+*Version: 0.8.6*
+
+[View on GitHub](https://github.com/dhaupin/regarded)
