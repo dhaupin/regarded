@@ -4,9 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Button } from 'antd';
-import { message } from 'antd';
-import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { apiPost } from '@/lib/api';
 
 interface FormErrors {
@@ -16,6 +16,7 @@ interface FormErrors {
 
 export function StrategiesCreate() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [formData, setFormData] = useState({
@@ -44,7 +45,7 @@ export function StrategiesCreate() {
     e.preventDefault();
     
     if (!validate()) {
-      message.error('Please fix the errors above');
+      toast({ title: 'Error', description: 'Please fix the errors above', variant: 'destructive' });
       return;
     }
     
@@ -59,13 +60,13 @@ export function StrategiesCreate() {
       });
       
       if (data.success) {
-        message.success('Strategy created successfully');
+        toast({ title: 'Success', description: 'Strategy created successfully', variant: 'success' });
         navigate('/strategies');
       } else {
-        message.error(data.error?.message || 'Failed to create strategy');
+        toast({ title: 'Error', description: data.error?.message || 'Failed to create strategy', variant: 'destructive' });
       }
     } catch (error) {
-      message.error('Failed to create strategy');
+      toast({ title: 'Error', description: 'Failed to create strategy', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -77,10 +78,11 @@ export function StrategiesCreate() {
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-4">
         <Button 
-          type="text" 
-          icon={<ArrowLeftOutlined />} 
+          variant="ghost" 
+          size="sm"
           onClick={() => navigate('/strategies')}
         >
+          <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
         <div>
@@ -165,10 +167,11 @@ export function StrategiesCreate() {
             </div>
 
             <div className="flex gap-2 pt-4">
-              <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={loading}>
-                Create Strategy
+              <Button type="submit" disabled={loading}>
+                <Plus className="mr-2 h-4 w-4" />
+                {loading ? 'Creating...' : 'Create Strategy'}
               </Button>
-              <Button variant="outlined" onClick={() => navigate('/strategies')}>
+              <Button variant="outline" onClick={() => navigate('/strategies')}>
                 Cancel
               </Button>
             </div>
