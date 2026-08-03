@@ -4,7 +4,7 @@
 
 Regarded is a KISS/DRY crypto trading agent platform that executes paper and live trades based on technical indicators and custom rulesets. It targets the Cloudflare free tier.
 
-**Repository:** `regarded.creadev.org`  
+**Repository:** `github.com/dhaupin/regarded`  
 **Tech Stack:** Vite/React (frontend), Cloudflare Workers/Hono (backend), D2 (database), KV (cache)  
 **Initial Focus:** Personal/small team use with Google auth
 
@@ -24,7 +24,8 @@ lib/
 ├── network.ts         # HTTP client with retry, circuit breaker
 ├── scheduler.ts       # Cron scheduler, heartbeat
 ├── auth.ts            # JWT, OAuth, sessions, lockout
-├── config.ts         # Config registry, secrets
+├── config.ts         # Config registry
+├── secrets.ts        # Encrypted secrets storage
 ├── storage.ts        # KV cache, rate limiter
 ├── cache.ts          # LRU cache with TTL
 ├── event.ts          # Event emitter
@@ -32,7 +33,9 @@ lib/
 ├── indicators.ts     # RSI, KDJ, Bollinger, MACD
 ├── patterns.ts       # Humps, divergence, etc.
 ├── rules.ts          # Rules engine
-├── notify.ts         # Canonical notification handler (uses adapters)
+├── notify.ts         # Canonical notification handler
+├── backtest.ts       # Backtesting engine
+├── news.ts           # News service
 ├── utils.ts          # Helper functions
 ├── connectors.ts     # Factory & registry
 ├── runner.ts         # TradingAgent execution engine
@@ -184,35 +187,36 @@ if (!validation.allowed) {
 
 ```
 /
-├── frontend/           # Vite + React app
+├── app/                # Vite + React frontend
 │   ├── src/
 │   │   ├── components/
 │   │   ├── pages/
 │   │   ├── hooks/
 │   │   ├── services/
 │   │   ├── stores/
-│   │   ├── types/
+│   │   ├── lib/
 │   │   └── styles/
 │   └── vite.config.ts
 │
-├── backend/            # Cloudflare Workers
+├── srv/               # Cloudflare Workers backend
 │   ├── src/
-│   │   ├── routes/    # API route handlers
-│   │   ├── middleware/# Auth, error handling
-│   │   ├── services/  # Business logic
-│   │   ├── connectors/# Exchange connectors
-│   │   ├── indicators/# Technical indicators
-│   │   ├── engine/    # Rules/trading engine
-│   │   └── types/
-│   ├── migrations/    # D2 schema migrations
+│   │   ├── app.ts    # Hono app entry
+│   │   ├── env.ts    # Environment types
+│   │   └── routes/   # API route handlers
+│   ├── migrations/   # D2 schema migrations
 │   └── wrangler.toml
 │
-├── shared/             # Shared types/utilities
-│   └── types/
+├── lib/               # Core trading library
+│   ├── *.ts          # Modules (rules, indicators, etc.)
+│   ├── connectors/   # Exchange connectors
+│   └── adapters/     # Notification adapters
 │
-├── SPECS.md           # Full specification
-├── ROADMAP.md         # Project phases
-└── AGENTS.md         # This file
+├── test/              # Test files (*.test.ts)
+│
+├── README.md          # Project overview
+├── AGENTS.md         # This file
+├── ROADMAP.md        # Version history
+└── DEPLOY.md         # Deployment instructions
 ```
 
 ---
@@ -369,7 +373,7 @@ Key tables:
 - `audit_log` - Security audit events
 - `configs` - User/strategy configurations
 
-See `backend/migrations/` for full schema.
+See `srv/migrations/` for full schema.
 
 ---
 

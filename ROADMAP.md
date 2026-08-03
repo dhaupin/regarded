@@ -86,6 +86,7 @@ Core engine complete.
 | `lib/scheduler.ts` | ✅ Done |
 | `lib/auth.ts` | ✅ Done |
 | `lib/config.ts` | ✅ Done |
+| `lib/secrets.ts` | ✅ Done |
 | `lib/storage.ts` | ✅ Done |
 | `lib/indicators.ts` | ✅ Done |
 | `lib/patterns.ts` | ✅ Done |
@@ -107,6 +108,8 @@ Core engine complete.
 | `lib/backtest.ts` | ✅ Done |
 | `lib/news.ts` | ✅ Done |
 | `lib/psy.ts` | ✅ Done |
+| `lib/api.ts` | ✅ Done |
+| `lib/utils.ts` | ✅ Done |
 
 ### Gaps & TODO
 

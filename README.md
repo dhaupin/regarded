@@ -53,9 +53,13 @@ lib/                     # Core trading library (~40 modules)
 ├── indicators.ts       # RSI, KDJ, Bollinger, MACD
 ├── patterns.ts        # Humps, divergence, crossovers
 ├── rules.ts           # Rules engine
+├── runner.ts          # TradingAgent orchestration
 ├── portfolio.ts       # Position management
 ├── guard.ts           # Risk guardrails
-└── ...                # Auth, encryption, cache, network, etc.
+├── backtest.ts       # Backtesting engine
+├── news.ts           # News service
+├── psy.ts            # Market psychology
+└── ...                # Auth, encryption, cache, network, scheduler, etc.
 
 srv/                    # Cloudflare Workers server
 ├── src/
