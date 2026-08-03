@@ -25,8 +25,8 @@
 | StrategiesList | ✅ Done | |
 | RulesList | ✅ Done | |
 | ConnectorsCreate | ✅ Done | |
-| ConnectorsEdit | ⬜ | |
-| RulesCreate | ⬜ | |
+| ConnectorsEdit | ✅ Done | Clean |
+| RulesCreate | ✅ Done | |
 | RulesEdit | ⬜ | Has Refine |
 | StrategiesCreate | ⬜ | |
 | StrategiesEdit | ⬜ | Has Refine |
@@ -37,4 +37,4 @@
 
 - 2026-08-03: Phase 1 - Remove antd dependencies
 - 2026-08-03: Phase 2a - Create Loading, Tabs, Checkbox components
-- 2026-08-03: 7 pages migrated
+- 2026-08-03: 8 pages migrated

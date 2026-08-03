@@ -3,10 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { Loading } from '@/components/ui/loading';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 import { useAuthProvider } from '@/hooks/useAuth';
-import { message } from 'antd';
-import { Spin, Button, Select, Tabs, Tag, Alert } from 'antd';
-import { PlusOutlined, DeleteOutlined, ApiOutlined, KeyOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
+import { Plus, Trash2, Api, Key, Clock, Globe } from 'lucide-react';
 import { apiGet, apiPut } from '@/lib/api';
 
 interface UserConfig {
@@ -43,6 +47,7 @@ interface Session {
 
 export function Settings() {
   const { user } = useAuthProvider();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('general');
   const [saving, setSaving] = useState(false);
