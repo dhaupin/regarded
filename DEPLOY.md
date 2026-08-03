@@ -137,9 +137,27 @@ npm run deploy:prod     # Deploy to production
 
 ## 3. Frontend (Pages)
 
-### Configure Environment (Required)
+### Configure Environment
 
-Copy and configure `app/.env.example`:
+The frontend needs to know the Workers API URL. You can set this in multiple ways:
+
+#### Option 1: Cloudflare Pages Settings (Recommended for production)
+
+In Cloudflare Dashboard → Pages → regarded → Settings → Environment variables:
+
+| Variable | Value |
+|---------|-------|
+| `VITE_API_URL` | `https://your-workers-domain.workers.dev` |
+
+#### Option 2: GitHub Secrets (if using CI/CD)
+
+Set in GitHub → Settings → Secrets → Actions:
+
+| Secret | Value |
+|--------|-------|
+| `VITE_API_URL` | `https://your-workers-domain.workers.dev` |
+
+#### Option 3: .env file (local development only)
 
 ```bash
 cp app/.env.example app/.env
@@ -150,6 +168,8 @@ Edit `app/.env`:
 # Production: Workers URL after deployment
 VITE_API_URL=https://your-workers-domain.workers.dev
 ```
+
+> ⚠️ **Important**: Never commit `.env` files to version control. Add `app/.env` to `.gitignore`.
 
 ### Build & Deploy via GitHub
 
@@ -182,12 +202,23 @@ VITE_API_URL=http://localhost:8787 npm run dev
 
 ## 4. Environment Variables Summary
 
-| Variable | Where | Description |
-|----------|-------|-------------|
-| `GOOGLE_CLIENT_ID` | Workers (secret) | Google OAuth Client ID |
-| `GOOGLE_CLIENT_SECRET` | Workers (secret) | Google OAuth Client Secret |
-| `JWT_SECRET` | Workers (secret) | Secret for JWT tokens |
-| `VITE_API_URL` | Frontend (.env) | Workers API URL |
+### Workers (Backend)
+
+Set via **GitHub Secrets** (CI/CD) or **Wrangler secrets** (local):
+
+| Variable | Recommended | Description |
+|----------|-------------|-------------|
+| `GOOGLE_CLIENT_ID` | Secret | Google OAuth Client ID |
+| `GOOGLE_CLIENT_SECRET` | Secret | Google OAuth Client Secret |
+| `JWT_SECRET` | Secret | JWT signing secret |
+
+### Pages (Frontend)
+
+Set via **Cloudflare Pages Settings**, **GitHub Secrets**, or **.env file** (local):
+
+| Variable | Recommended | Description |
+|----------|-------------|-------------|
+| `VITE_API_URL` | Pages Settings | Workers API URL |
 
 ---
 
